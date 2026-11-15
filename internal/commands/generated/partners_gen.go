@@ -44,7 +44,7 @@ var partnersOrganizationsMethods = []resource.Method{
 		Name:       "partners.organizations.list",
 		Use:        "list <partnerId>",
 		Short:      "List all customer organizations",
-		Long:       "Returns a list of the organizations you created. `grantActive` is `false` once a customer disconnects your app. Requires the `partner:orgs:read` scope.\n\nScopes: partner:orgs:read",
+		Long:       "Returns a list of the organizations you created. `grantActive` is `false` once a customer disconnects your app. Requires the `partner:orgs:read` scope.\n\n--all follows every page, keeping the other flags, and prints all the items as one JSON array, so `| jq` works; add --ndjson to print one compact item per line as each page arrives.\n\nScopes: partner:orgs:read",
 		HTTPMethod: "GET",
 		Path:       "/partners/{partnerId}/organizations",
 		PathParams: []string{"partnerId"},
@@ -53,5 +53,6 @@ var partnersOrganizationsMethods = []resource.Method{
 			{Name: "limit", Path: []string{"limit"}, Type: resource.Int, Usage: "How many objects to return, between 1 and 100. Defaults to 20."},
 			{Name: "cursor", Path: []string{"cursor"}, Type: resource.String, Usage: "The `nextCursor` from the previous page."},
 		},
+		Pagination: &resource.Pagination{Param: "cursor"},
 	},
 }

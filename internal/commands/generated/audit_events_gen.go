@@ -11,7 +11,7 @@ var auditEventsMethods = []resource.Method{
 		Name:               "auditEvents.list",
 		Use:                "list",
 		Short:              "List all audit events",
-		Long:               "Returns a list of the organization's audit events, newest first. Filter by `type`, `transition`, `subjectId`, or a `since` and `until` range.\n\nScopes: audit:read",
+		Long:               "Returns a list of the organization's audit events, newest first. Filter by `type`, `transition`, `subjectId`, or a `since` and `until` range.\n\n--all follows every page, keeping the other flags, and prints all the items as one JSON array, so `| jq` works; add --ndjson to print one compact item per line as each page arrives.\n\nScopes: audit:read",
 		HTTPMethod:         "GET",
 		Path:               "/audit-events",
 		OrganizationScoped: true,
@@ -25,5 +25,6 @@ var auditEventsMethods = []resource.Method{
 			{Name: "since", Path: []string{"since"}, Type: resource.String, Usage: "Inclusive lower bound on `at` (ISO-8601 instant)."},
 			{Name: "until", Path: []string{"until"}, Type: resource.String, Usage: "Inclusive upper bound on `at` (ISO-8601 instant)."},
 		},
+		Pagination: &resource.Pagination{Param: "cursor"},
 	},
 }

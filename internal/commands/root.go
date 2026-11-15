@@ -25,6 +25,9 @@ const (
 	exitInvalid     = 5
 	exitRateLimited = 6
 	exitServer      = 7
+	// exitInterrupted is the shell's code for a process stopped by SIGINT
+	// (128 + 2), so an interrupted `--all` or `--wait` never reads as done.
+	exitInterrupted = 130
 )
 
 // newRoot builds `tmh` with every subcommand wired to deps; the command that
@@ -82,6 +85,9 @@ func Execute(ctx context.Context, deps cmdutil.Deps, args []string) int {
 // renderError never includes a credential: API errors carry only what the
 // response said, and request headers never reach an error.
 func renderError(err error) string {
+	if errors.Is(err, context.Canceled) {
+		return "Interrupted"
+	}
 	lines := []string{"Error: " + err.Error()}
 	var apiErr *api.Error
 	if errors.As(err, &apiErr) {
@@ -100,14 +106,18 @@ func exitCode(err error) int {
 	var connectionErr *api.ConnectionError
 	var notLoggedIn *cmdutil.NotLoggedInError
 	var notFound *cmdutil.NotFoundError
+	var operationFailed *api.OperationFailedError
+	var operationTimeout *api.OperationTimeoutError
 	switch {
 	case err == nil:
 		return exitOK
+	case errors.Is(err, context.Canceled):
+		return exitInterrupted
 	case errors.As(err, &notLoggedIn):
 		return exitAuth
 	case errors.As(err, &notFound):
 		return exitNotFound
-	case errors.As(err, &connectionErr):
+	case errors.As(err, &connectionErr), errors.As(err, &operationFailed), errors.As(err, &operationTimeout):
 		return exitServer
 	case errors.As(err, &apiErr):
 		return exitCodeForStatus(apiErr)

@@ -11,11 +11,12 @@ var operationsMethods = []resource.Method{
 		Name:               "operations.retrieve",
 		Use:                "retrieve <operationId>",
 		Short:              "Retrieve an operation",
-		Long:               "Retrieves a bulk operation and its result. Operations are kept for 24 hours.\n\nScopes: ",
+		Long:               "Retrieves a bulk operation and its result. Operations are kept for 24 hours.\n\n--wait polls the Operation until it is done (up to --wait-timeout) and prints it; if it failed, tmh prints its problem and exits 7.\n\nScopes: ",
 		HTTPMethod:         "GET",
 		Path:               "/operations/{operationId}",
 		PathParams:         []string{"operationId"},
 		OrganizationScoped: true,
 		RetrySafe:          true,
+		ReturnsOperation:   true,
 	},
 }

@@ -11,7 +11,7 @@ var membersMethods = []resource.Method{
 		Name:               "members.list",
 		Use:                "list",
 		Short:              "List all members",
-		Long:               "Returns a list of the organization's members, its admins and learners. Pass `role=admin` to list only admins.\n\nScopes: members:read",
+		Long:               "Returns a list of the organization's members, its admins and learners. Pass `role=admin` to list only admins.\n\n--all follows every page, keeping the other flags, and prints all the items as one JSON array, so `| jq` works; add --ndjson to print one compact item per line as each page arrives.\n\nScopes: members:read",
 		HTTPMethod:         "GET",
 		Path:               "/members",
 		OrganizationScoped: true,
@@ -22,6 +22,7 @@ var membersMethods = []resource.Method{
 			{Name: "include", Path: []string{"include"}, Type: resource.String, Usage: "Opt-in, comma-separated. With `enrollmentSubject`, a member whose `subjectId` is null carries `enrollmentSubjectId`: the subject their email resolves to (a never-signed-in invitee), or null when none. Use it only to match the member to Enrollments; it is not an address for member routes. With `holdsInvitation`, each learner carries `holdsInvitation`: whether the organization has an invitation for their email or a Seat bound to them. Each key is omitted when its lookup failed."},
 			{Name: "role", Path: []string{"role"}, Type: resource.String, Usage: "Only admins (paginated); one of: admin", Values: []string{"admin"}},
 		},
+		Pagination: &resource.Pagination{Param: "cursor"},
 	},
 	{
 		Name:               "members.retrieve",

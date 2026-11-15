@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -45,6 +46,17 @@ type Method struct {
 	Body *Body
 	// BinaryResponse is set when the response is a file, not JSON.
 	BinaryResponse bool
+	// Accept is the Accept header for a BinaryResponse, naming the file's
+	// media type and problem+json for errors.
+	Accept string
+	// Pagination is set on list methods, which get --all and --ndjson.
+	Pagination *Pagination
+	// ReturnsOperation is set when the response is an Operation, which
+	// gets --wait.
+	ReturnsOperation bool
+	// Export is set on Operations whose response holds a file, which get
+	// -o/--output.
+	Export bool
 	// Preview is the command a --preview flag stands for, e.g.
 	// "enrollments preview-import".
 	Preview string
@@ -60,7 +72,23 @@ type Body struct {
 	Fixed []Fixed
 	// FileParts are the multipart parts that carry a file, one --<part>
 	// flag each.
-	FileParts []string
+	FileParts []FilePart
+}
+
+// FilePart is a multipart part read from a file.
+type FilePart struct {
+	Name        string
+	ContentType string
+}
+
+// Pagination is how a list method pages.
+type Pagination struct {
+	// Param is the query parameter that asks for the next page.
+	Param string
+	// ItemID, when set, is the item field whose last value is the next
+	// page's Param, as the event log's `after` is; otherwise the page's
+	// nextCursor is.
+	ItemID string
 }
 
 // Fixed is a body field with a value the caller can't change.
@@ -111,7 +139,7 @@ type Flag struct {
 func NewGroup(f *cmdutil.Factory, name, short string, methods []Method, groups ...*cobra.Command) *cobra.Command {
 	group := &cobra.Command{Use: name, Short: short}
 	for _, method := range methods {
-		group.AddCommand(NewCommand(f, method))
+		group.AddCommand(newCommand(f, method, previewOf(method, methods)))
 	}
 	group.AddCommand(groups...)
 	return group
@@ -126,10 +154,31 @@ type input struct {
 	output  string
 	files   map[string]*string
 	preview bool
+	all     bool
+	ndjson  bool
+	wait    bool
+	// waitTimeout bounds --wait.
+	waitTimeout time.Duration
 }
 
-// NewCommand is the command for one method.
-func NewCommand(f *cmdutil.Factory, method Method) *cobra.Command {
+// previewOf is the method a --preview flag switches to: the sibling command
+// Method.Preview names.
+func previewOf(method Method, siblings []Method) *Method {
+	if method.Preview == "" {
+		return nil
+	}
+	words := strings.Fields(method.Preview)
+	for i := range siblings {
+		if strings.Fields(siblings[i].Use)[0] == words[len(words)-1] {
+			return &siblings[i]
+		}
+	}
+	return nil
+}
+
+// newCommand is the command for one method. With --preview it sends
+// preview instead, which takes the same flags.
+func newCommand(f *cmdutil.Factory, method Method, preview *Method) *cobra.Command {
 	in := &input{values: map[string]func() any{}, files: map[string]*string{}}
 	command := &cobra.Command{
 		Use:         method.Use,
@@ -139,6 +188,12 @@ func NewCommand(f *cmdutil.Factory, method Method) *cobra.Command {
 		Annotations: map[string]string{"method": method.Name},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			in.flags = cmd.Flags()
+			if in.preview {
+				if in.wait {
+					return &cmdutil.UsageError{Message: "--wait doesn't apply to --preview, which answers at once"}
+				}
+				return run(cmd, f, *preview, in, args)
+			}
 			return run(cmd, f, method, in, args)
 		},
 	}
@@ -154,7 +209,7 @@ func NewCommand(f *cmdutil.Factory, method Method) *cobra.Command {
 			in.bind(command, flag)
 		}
 		for _, part := range body.FileParts {
-			in.files[part] = flags.String(part, "", "path of the file to upload as "+part)
+			in.files[part.Name] = flags.String(part.Name, "", "path of the file to upload as "+part.Name+", or - for stdin")
 		}
 		if len(body.FileParts) == 0 {
 			flags.StringArrayVarP(&in.data, "data", "d", nil,
@@ -170,9 +225,20 @@ func NewCommand(f *cmdutil.Factory, method Method) *cobra.Command {
 		}
 	}
 	if method.BinaryResponse {
-		flags.StringVarP(&in.output, "output", "o", "", "file to save the response to")
+		flags.StringVarP(&in.output, "output", "o", "", "file to save the response to, or - for stdout when it is piped")
 	}
-	if method.Preview != "" {
+	if method.ReturnsOperation {
+		flags.BoolVar(&in.wait, "wait", false, "wait until the Operation is done and print it; a failed Operation exits 7")
+		flags.DurationVar(&in.waitTimeout, "wait-timeout", 5*time.Minute, "how long --wait waits before giving up")
+	}
+	if method.Export {
+		flags.StringVarP(&in.output, "output", "o", "", "save the export's CSV to this file, or - for stdout, once it is done (implies --wait)")
+	}
+	if method.Pagination != nil {
+		flags.BoolVar(&in.all, "all", false, "follow every page and print all the items as one JSON array; --limit sets the page size")
+		flags.BoolVar(&in.ndjson, "ndjson", false, "with --all, print one compact JSON item per line as each page arrives")
+	}
+	if preview != nil {
 		flags.BoolVar(&in.preview, "preview", false, "check the upload without committing it, as `tmh "+method.Preview+"` does")
 	}
 	return command
@@ -215,6 +281,12 @@ func run(cmd *cobra.Command, f *cmdutil.Factory, method Method, in *input, args 
 	if err != nil {
 		return err
 	}
+	if in.ndjson && !in.all {
+		return &cmdutil.UsageError{Message: "--ndjson needs --all"}
+	}
+	if method.ReturnsOperation && in.waitTimeout <= 0 {
+		return &cmdutil.UsageError{Message: "--wait-timeout must be more than 0"}
+	}
 	query := url.Values{}
 	for _, flag := range method.Query {
 		addQuery(query, flag.Path[0], in.value(flag))
@@ -223,14 +295,20 @@ func run(cmd *cobra.Command, f *cmdutil.Factory, method Method, in *input, args 
 		if in.output == "" {
 			return &cmdutil.UsageError{Message: "use -o/--output <file> to choose where to save the download"}
 		}
-		return &cmdutil.UsageError{Message: "this version of tmh can't save downloads yet"}
+		if err := f.CheckOutput(in.output, true); err != nil {
+			return err
+		}
 	}
 	var body []byte
 	contentType := ""
-	if method.Body != nil {
-		if len(method.Body.FileParts) > 0 {
-			return uploadError(method.Body, in)
+	switch {
+	case method.Body == nil:
+	case len(method.Body.FileParts) > 0:
+		// Read once, so every retry resends the same bytes.
+		if body, contentType, err = multipartBody(f, method.Body, in); err != nil {
+			return err
 		}
+	default:
 		contentType = method.Body.ContentType
 		if body, err = jsonBody(f, method.Body, in); err != nil {
 			return err
@@ -240,7 +318,7 @@ func run(cmd *cobra.Command, f *cmdutil.Factory, method Method, in *input, args 
 	if err != nil {
 		return err
 	}
-	response, err := client.Do(cmd.Context(), api.Request{
+	request := api.Request{
 		Method:             method.HTTPMethod,
 		Path:               path,
 		OrganizationScoped: method.OrganizationScoped,
@@ -251,9 +329,20 @@ func run(cmd *cobra.Command, f *cmdutil.Factory, method Method, in *input, args 
 		ContentType:        contentType,
 		IfMatch:            in.ifMatch,
 		Public:             method.Public,
-	})
+		Accept:             method.Accept,
+	}
+	if in.all {
+		return listAll(cmd.Context(), client, request, method.Pagination, f.Items(in.ndjson))
+	}
+	response, err := client.Do(cmd.Context(), request)
 	if err != nil {
 		return err
+	}
+	if method.BinaryResponse {
+		return f.SaveDownload(in.output, response.Body)
+	}
+	if method.ReturnsOperation && (in.wait || in.output != "") {
+		return waitForOperation(cmd.Context(), f, client, response.Body, in)
 	}
 	return f.PrintJSON(response.Body)
 }
@@ -296,7 +385,7 @@ func addQuery(query url.Values, name string, value any) {
 	}
 }
 
-func jsonBody(f *cmdutil.Factory, body *Body, in *input) ([]byte, error) {
+func bodyFields(body *Body, in *input) []cmdutil.BodyField {
 	fields := []cmdutil.BodyField{}
 	for _, flag := range body.Fields {
 		if value := in.value(flag); value != nil {
@@ -310,14 +399,9 @@ func jsonBody(f *cmdutil.Factory, body *Body, in *input) ([]byte, error) {
 			Value:  json.RawMessage(fixed.JSON),
 		})
 	}
-	return f.Body(in.data, body.ContentType, fields...)
+	return fields
 }
 
-func uploadError(body *Body, in *input) error {
-	for _, part := range body.FileParts {
-		if *in.files[part] == "" {
-			return &cmdutil.UsageError{Message: fmt.Sprintf("use --%s <path> to choose the file to upload", part)}
-		}
-	}
-	return &cmdutil.UsageError{Message: "this version of tmh can't upload files yet"}
+func jsonBody(f *cmdutil.Factory, body *Body, in *input) ([]byte, error) {
+	return f.Body(in.data, body.ContentType, bodyFields(body, in)...)
 }

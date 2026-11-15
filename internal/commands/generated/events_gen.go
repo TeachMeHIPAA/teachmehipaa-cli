@@ -11,7 +11,7 @@ var eventsMethods = []resource.Method{
 		Name:               "events.list",
 		Use:                "list",
 		Short:              "List all events",
-		Long:               "Returns a list of the organization's events from the last 30 days, oldest first. Pass the last `eventId` you processed as `after` to resume where you stopped, and `type` to list one event type.\n\nScopes: webhooks:manage or audit:read",
+		Long:               "Returns a list of the organization's events from the last 30 days, oldest first. Pass the last `eventId` you processed as `after` to resume where you stopped, and `type` to list one event type.\n\n--all follows every page, keeping the other flags, and prints all the items as one JSON array, so `| jq` works; add --ndjson to print one compact item per line as each page arrives.\n\nScopes: webhooks:manage or audit:read",
 		HTTPMethod:         "GET",
 		Path:               "/events",
 		OrganizationScoped: true,
@@ -21,5 +21,6 @@ var eventsMethods = []resource.Method{
 			{Name: "after", Path: []string{"after"}, Type: resource.String, Usage: "Return events after this event id (exclusive). The previous page's `nextCursor`."},
 			{Name: "type", Path: []string{"type"}, Type: resource.String, Usage: "Filter to one event type; one of: enrollment.certified, seat.consumed, seat.freed, learner.invited, learner.started, learner.certified, learner.expiring, learner.expired, learner.removed, invite.bounced, certificate.revoked, seats.low, seat_order.paid, seat_order.failed, seat_order.expired", Values: []string{"enrollment.certified", "seat.consumed", "seat.freed", "learner.invited", "learner.started", "learner.certified", "learner.expiring", "learner.expired", "learner.removed", "invite.bounced", "certificate.revoked", "seats.low", "seat_order.paid", "seat_order.failed", "seat_order.expired"}},
 		},
+		Pagination: &resource.Pagination{Param: "after", ItemID: "eventId"},
 	},
 }

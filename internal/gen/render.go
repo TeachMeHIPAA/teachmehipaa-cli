@@ -123,11 +123,27 @@ func writeMethod(src *bytes.Buffer, m resource.Method) {
 			field(src, "Fixed", "[]resource.Fixed{"+strings.Join(fixed, ", ")+"}")
 		}
 		if len(b.FileParts) > 0 {
-			field(src, "FileParts", stringSlice(b.FileParts))
+			parts := []string{}
+			for _, part := range b.FileParts {
+				parts = append(parts, fmt.Sprintf("{Name: %q, ContentType: %q}", part.Name, part.ContentType))
+			}
+			field(src, "FileParts", "[]resource.FilePart{"+strings.Join(parts, ", ")+"}")
 		}
 		src.WriteString("},\n")
 	}
 	boolField(src, "BinaryResponse", m.BinaryResponse)
+	if m.Accept != "" {
+		field(src, "Accept", strconv.Quote(m.Accept))
+	}
+	if p := m.Pagination; p != nil {
+		if p.ItemID != "" {
+			field(src, "Pagination", fmt.Sprintf("&resource.Pagination{Param: %q, ItemID: %q}", p.Param, p.ItemID))
+		} else {
+			field(src, "Pagination", fmt.Sprintf("&resource.Pagination{Param: %q}", p.Param))
+		}
+	}
+	boolField(src, "ReturnsOperation", m.ReturnsOperation)
+	boolField(src, "Export", m.Export)
 	if m.Preview != "" {
 		field(src, "Preview", strconv.Quote(m.Preview))
 	}

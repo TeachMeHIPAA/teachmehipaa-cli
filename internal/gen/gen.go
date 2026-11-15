@@ -20,6 +20,15 @@ const orgPrefix = "/organizations/{orgId}"
 // shadow one.
 var globalFlags = []string{"help", "profile", "live", "max-retries", "idempotency-key", "verbose", "show-headers"}
 
+// afterItemID is the item field an `after`-style list resumes from. The IR
+// names only the parameter; the event log is the one such list, and its
+// `after` is the last Event's id (api-sdk-surface.md §4).
+const afterItemID = "eventId"
+
+// binaryAcceptSuffix also names problem+json, so a failed download still explains
+// itself.
+const binaryAcceptSuffix = ", application/problem+json"
+
 // rootCommands are the hand-written commands a resource group must not
 // collide with.
 var rootCommands = []string{"completion", "delete", "get", "help", "login", "logout", "open", "patch", "post", "put", "version", "whoami"}
@@ -165,11 +174,28 @@ func (g *generator) method(resourcePath []string, m irMethod) (resource.Method, 
 	}
 
 	switch m.Response.Kind {
-	case "model", "page", "operation", "writeResult", "empty":
+	case "model", "writeResult", "empty":
+	case "page":
+		pagination, err := paginationOf(m.Pagination)
+		if err != nil {
+			return method, err
+		}
+		method.Pagination = pagination
+	case "operation":
+		method.ReturnsOperation = true
+		// An export's Operation carries its file inline (research §8).
+		method.Export = m.Name == "export"
 	case "binary":
+		if m.Response.ContentType == "" {
+			return method, fmt.Errorf("binary response without a content type")
+		}
 		method.BinaryResponse = true
+		method.Accept = m.Response.ContentType + binaryAcceptSuffix
 	default:
 		return method, fmt.Errorf("unknown response kind %q", m.Response.Kind)
+	}
+	if m.Pagination != nil && m.Response.Kind != "page" {
+		return method, fmt.Errorf("pagination on a %s response", m.Response.Kind)
 	}
 
 	for _, p := range m.QueryParams {
@@ -194,6 +220,19 @@ func (g *generator) method(resourcePath []string, m irMethod) (resource.Method, 
 	}
 	method.Long = long(m, body)
 	return method, nil
+}
+
+func paginationOf(p *irPagination) (*resource.Pagination, error) {
+	if p == nil {
+		return nil, fmt.Errorf("a page response without pagination")
+	}
+	switch p.Style {
+	case "cursor":
+		return &resource.Pagination{Param: p.CursorParam}, nil
+	case "after":
+		return &resource.Pagination{Param: p.CursorParam, ItemID: afterItemID}, nil
+	}
+	return nil, fmt.Errorf("unknown pagination style %q", p.Style)
 }
 
 // path strips the Organization prefix the client fills in and checks that
@@ -300,7 +339,7 @@ func (g *generator) body(b irBody) (*resource.Body, bodyHelp, error) {
 	body := &resource.Body{ContentType: b.ContentType}
 	fileParts := map[string]bool{}
 	for _, part := range b.BinaryParts {
-		body.FileParts = append(body.FileParts, part.Name)
+		body.FileParts = append(body.FileParts, resource.FilePart{Name: part.Name, ContentType: part.ContentType})
 		fileParts[part.Name] = true
 	}
 	variants := map[string]string{}
@@ -496,7 +535,9 @@ func checkFlagNames(method resource.Method) error {
 	extra := []string{}
 	if method.Body != nil {
 		flags = append(flags, method.Body.Fields...)
-		extra = append(extra, method.Body.FileParts...)
+		for _, part := range method.Body.FileParts {
+			extra = append(extra, part.Name)
+		}
 		if len(method.Body.FileParts) == 0 {
 			extra = append(extra, "data")
 		}
@@ -504,8 +545,14 @@ func checkFlagNames(method resource.Method) error {
 	if method.IfMatch != resource.None {
 		extra = append(extra, "if-match")
 	}
-	if method.BinaryResponse {
+	if method.BinaryResponse || method.Export {
 		extra = append(extra, "output")
+	}
+	if method.Pagination != nil {
+		extra = append(extra, "all", "ndjson")
+	}
+	if method.ReturnsOperation {
+		extra = append(extra, "wait", "wait-timeout")
 	}
 	if method.Preview != "" {
 		extra = append(extra, "preview")
@@ -537,6 +584,18 @@ func long(m irMethod, body bodyHelp) string {
 		}
 		paragraphs = append(paragraphs, fmt.Sprintf("Set %s, or send the whole body with --data @file.json.",
 			strings.Join(examples, ", ")))
+	}
+	switch m.Response.Kind {
+	case "page":
+		paragraphs = append(paragraphs, "--all follows every page, keeping the other flags, and prints all the items "+
+			"as one JSON array, so `| jq` works; add --ndjson to print one compact item per line as each page arrives.")
+	case "operation":
+		text := "--wait polls the Operation until it is done (up to --wait-timeout) and prints it; " +
+			"if it failed, tmh prints its problem and exits 7."
+		if m.Name == "export" {
+			text += " -o <file> saves the finished export's CSV instead."
+		}
+		paragraphs = append(paragraphs, text)
 	}
 	paragraphs = append(paragraphs, "Scopes: "+scopes(m.Security))
 	return strings.Join(paragraphs, "\n\n")

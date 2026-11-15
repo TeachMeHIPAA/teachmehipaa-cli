@@ -57,6 +57,39 @@ func notJSONMessage(status int, header http.Header) string {
 	return fmt.Sprintf("expected a JSON response but got %s with HTTP %d; check the base URL", contentType, status)
 }
 
+// accepts reports whether a success's content type is one the Accept header
+// asked for. problem+json only ever describes a failure.
+func accepts(accept string, header http.Header) bool {
+	mediaType, _, err := mime.ParseMediaType(header.Get("Content-Type"))
+	for _, wanted := range strings.Split(accept, ",") {
+		wanted, _, _ = strings.Cut(strings.TrimSpace(wanted), ";")
+		switch {
+		case wanted == "*/*":
+			return true
+		case err == nil && wanted == mediaType && wanted != "application/problem+json":
+			return true
+		}
+	}
+	return false
+}
+
+// unexpectedType is a success in a format that wasn't asked for, such as
+// the HTML page a wrong base URL answers a download with.
+func unexpectedType(status int, header http.Header, accept string) *Error {
+	contentType := header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "no content type"
+	}
+	wanted, _, _ := strings.Cut(accept, ",")
+	return &Error{
+		Status:         status,
+		RequestID:      header.Get("X-Request-Id"),
+		Header:         header,
+		UnexpectedBody: true,
+		message:        fmt.Sprintf("expected %s but got %s with HTTP %d; check the base URL", wanted, contentType, status),
+	}
+}
+
 func problemError(status int, header http.Header, body []byte) *Error {
 	e := &Error{Status: status, RequestID: header.Get("X-Request-Id"), Header: header}
 	var problem struct {

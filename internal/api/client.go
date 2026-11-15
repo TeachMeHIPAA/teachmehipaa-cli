@@ -79,6 +79,10 @@ type Request struct {
 	// Public is the IR's `security: none`: no Access token is minted or
 	// sent, so the operation works without credentials.
 	Public bool
+	// Accept, when set, asks for a file instead of JSON, such as
+	// "application/pdf, application/problem+json" or "*/*". A success must
+	// then have one of its media types other than problem+json.
+	Accept string
 }
 
 // retrySafe never counts a key on PATCH or DELETE: those may have taken
@@ -185,7 +189,11 @@ func (c *Client) exchange(ctx context.Context, request Request, target, token st
 	if token != "" {
 		httpRequest.Header.Set("Authorization", "Bearer "+token)
 	}
-	httpRequest.Header.Set("Accept", "application/json")
+	accept := request.Accept
+	if accept == "" {
+		accept = "application/json"
+	}
+	httpRequest.Header.Set("Accept", accept)
 	httpRequest.Header.Set("User-Agent", c.config.UserAgent)
 	if request.IdempotencyKey != "" {
 		httpRequest.Header.Set("Idempotency-Key", request.IdempotencyKey)
@@ -194,9 +202,14 @@ func (c *Client) exchange(ctx context.Context, request Request, target, token st
 	if err != nil {
 		return nil, err
 	}
-	success := status >= 200 && status <= 299 && (isJSON(header) || status == http.StatusNoContent)
-	if !success {
+	switch {
+	case status < 200 || status > 299:
 		return nil, problemError(status, header, body)
+	case status == http.StatusNoContent || (request.Accept == "" && isJSON(header)):
+	case request.Accept == "":
+		return nil, problemError(status, header, body)
+	case !accepts(request.Accept, header):
+		return nil, unexpectedType(status, header, request.Accept)
 	}
 	return &Response{Status: status, Header: header, Body: body}, nil
 }

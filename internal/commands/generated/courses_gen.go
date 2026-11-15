@@ -11,7 +11,7 @@ var coursesMethods = []resource.Method{
 		Name:       "courses.list",
 		Use:        "list",
 		Short:      "List all courses",
-		Long:       "Returns a list of the courses in the public catalog. Needs no access token.\n\nScopes: none (public, no login needed)",
+		Long:       "Returns a list of the courses in the public catalog. Needs no access token.\n\n--all follows every page, keeping the other flags, and prints all the items as one JSON array, so `| jq` works; add --ndjson to print one compact item per line as each page arrives.\n\nScopes: none (public, no login needed)",
 		HTTPMethod: "GET",
 		Path:       "/courses",
 		Public:     true,
@@ -20,6 +20,7 @@ var coursesMethods = []resource.Method{
 			{Name: "limit", Path: []string{"limit"}, Type: resource.Int, Usage: "How many objects to return, between 1 and 100. Defaults to 20."},
 			{Name: "cursor", Path: []string{"cursor"}, Type: resource.String, Usage: "The `nextCursor` from the previous page."},
 		},
+		Pagination: &resource.Pagination{Param: "cursor"},
 	},
 	{
 		Name:       "courses.retrieve",

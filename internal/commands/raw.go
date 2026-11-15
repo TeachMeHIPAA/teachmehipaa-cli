@@ -21,6 +21,7 @@ type rawOptions struct {
 	data        []string
 	contentType string
 	ifMatch     string
+	output      string
 }
 
 func newRawCommands(f *cmdutil.Factory) []*cobra.Command {
@@ -76,6 +77,8 @@ func newRawCommand(f *cmdutil.Factory, method string) *cobra.Command {
 	flags := command.Flags()
 	flags.StringArrayVar(&options.query, "query", nil, "query parameter as key=value; repeatable")
 	if method == http.MethodGet {
+		flags.StringVarP(&options.output, "output", "o", "",
+			"save the response body unchanged to this file, or - for stdout when it is piped, whatever its content type")
 		return command
 	}
 	flags.StringVar(&options.ifMatch, "if-match", "", "send If-Match with this ETag, for a conditional write")
@@ -105,6 +108,13 @@ func runRaw(cmd *cobra.Command, f *cmdutil.Factory, method, rawPath string, opti
 	if err != nil {
 		return err
 	}
+	accept := ""
+	if options.output != "" {
+		if err := f.CheckOutput(options.output, true); err != nil {
+			return err
+		}
+		accept = "*/*"
+	}
 	client, _, err := f.APIClient()
 	if err != nil {
 		return err
@@ -126,9 +136,13 @@ func runRaw(cmd *cobra.Command, f *cmdutil.Factory, method, rawPath string, opti
 		Body:           body,
 		ContentType:    options.contentType,
 		IfMatch:        options.ifMatch,
+		Accept:         accept,
 	})
 	if err != nil {
 		return err
+	}
+	if options.output != "" {
+		return f.SaveDownload(options.output, response.Body)
 	}
 	return f.PrintJSON(response.Body)
 }

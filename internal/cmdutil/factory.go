@@ -226,11 +226,21 @@ func (f *Factory) PrintJSON(body []byte) error {
 	if len(body) == 0 {
 		return nil
 	}
+	return output.JSON(f.Stdout, body, f.style())
+}
+
+// Items prints list items to stdout as they arrive: one JSON array, or
+// NDJSON when ndjson is set.
+func (f *Factory) Items(ndjson bool) *output.Items {
+	if ndjson {
+		return output.NewLines(f.Stdout, f.style())
+	}
+	return output.NewArray(f.Stdout, f.style())
+}
+
+func (f *Factory) style() output.Style {
 	_, noColor := f.LookupEnv("NO_COLOR")
-	return output.JSON(f.Stdout, body, output.Style{
-		Pretty: f.StdoutIsTTY,
-		Color:  f.StdoutIsTTY && !noColor,
-	})
+	return output.Style{Pretty: f.StdoutIsTTY, Color: f.StdoutIsTTY && !noColor}
 }
 
 // ReadLine reads one line from stdin without its line ending.

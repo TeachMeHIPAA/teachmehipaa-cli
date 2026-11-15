@@ -35,7 +35,7 @@ var seatOrdersMethods = []resource.Method{
 		Name:               "seatOrders.list",
 		Use:                "list",
 		Short:              "List all seat orders",
-		Long:               "Returns a list of the organization's seat orders, oldest first. Requires the `seats:purchase` or `billing:write` scope.\n\nScopes: seats:purchase or billing:write",
+		Long:               "Returns a list of the organization's seat orders, oldest first. Requires the `seats:purchase` or `billing:write` scope.\n\n--all follows every page, keeping the other flags, and prints all the items as one JSON array, so `| jq` works; add --ndjson to print one compact item per line as each page arrives.\n\nScopes: seats:purchase or billing:write",
 		HTTPMethod:         "GET",
 		Path:               "/seat-orders",
 		OrganizationScoped: true,
@@ -44,6 +44,7 @@ var seatOrdersMethods = []resource.Method{
 			{Name: "limit", Path: []string{"limit"}, Type: resource.Int, Usage: "How many objects to return, between 1 and 100. Defaults to 20."},
 			{Name: "cursor", Path: []string{"cursor"}, Type: resource.String, Usage: "The `nextCursor` from the previous page."},
 		},
+		Pagination: &resource.Pagination{Param: "cursor"},
 	},
 	{
 		Name:               "seatOrders.quote",
