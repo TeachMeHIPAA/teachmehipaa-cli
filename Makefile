@@ -1,6 +1,6 @@
 STATICCHECK_VERSION := 2026.2.2
 
-.PHONY: build test vet lint fmt check generate check-generated
+.PHONY: build test vet lint fmt check generate check-generated release-check snapshot
 
 build:
 	go build -o bin/tmh ./cmd/tmh
@@ -26,3 +26,10 @@ check-generated:
 	go run ./cmd/gen -check
 
 check: lint test
+
+release-check:
+	goreleaser check
+
+# Builds everything a release ships into dist/ without publishing.
+snapshot:
+	goreleaser release --snapshot --clean
