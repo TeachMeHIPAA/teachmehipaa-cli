@@ -1,14 +1,9 @@
 package keyring
 
-import (
-	"errors"
-	"sync"
-)
+import "errors"
 
-// Memory is an in-process Keyring for tests. It is safe to share between
-// concurrent runs, as one machine's keyring is between processes.
+// Memory is an in-process Keyring for tests.
 type Memory struct {
-	mu      sync.Mutex
 	secrets map[string]string
 	broken  error
 }
@@ -23,8 +18,6 @@ func NewUnavailable() *Memory {
 
 // Get returns the stored secret, or ErrNotFound.
 func (m *Memory) Get(service, user string) (string, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	if m.broken != nil {
 		return "", m.broken
 	}
@@ -37,8 +30,6 @@ func (m *Memory) Get(service, user string) (string, error) {
 
 // Set stores the secret, replacing any before it.
 func (m *Memory) Set(service, user, secret string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	if m.broken != nil {
 		return m.broken
 	}
@@ -48,8 +39,6 @@ func (m *Memory) Set(service, user, secret string) error {
 
 // Delete removes the secret, or returns ErrNotFound.
 func (m *Memory) Delete(service, user string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	if m.broken != nil {
 		return m.broken
 	}

@@ -105,56 +105,6 @@ Without a terminal, pass the id as a flag and pipe the secret on stdin:
 printf %s "$SECRET" | tmh login --client-id cli_01JD7Z…
 ```
 
-### Partner apps
-
-A Partner app connects to many Organizations, one Grant each. To test as a
-connected app, log in with the app's id (`app_…`) and secret:
-
-```console
-$ tmh login --partner-app --live --scopes learners:read,learners:write
-Partner app ID: app_01JD7Z…
-Partner app secret:
-Open this URL to connect an Organization, then return here:
-  https://console.teachmehipaa.com/oauth/authorize?response_type=code&client_id=app_01JD7Z…
-Logged in to Live as Organization org_acme through Partner app app_01JD7Z….
-```
-
-`tmh` opens the console's consent page with a PKCE (S256) challenge and a
-random `state`, and listens for the answer on
-`http://127.0.0.1:<port>/callback`, a random free port unless you pass
-`--redirect-port`. An Organization admin signs in and connects the app; the
-browser comes back to `tmh`, which checks the `state` and exchanges the code
-once. The Grant's Refresh token goes into the OS keyring (or `config.toml`
-without one), and `tmh whoami` shows the Partner app. Without a terminal, pass
-`--client-id` and pipe the secret on stdin, as for `tmh login`.
-
-> **The API does not accept loopback redirects yet.** A Partner app's
-> redirect URIs must be `https` (`RedirectUriSchema` in the platform's
-> `oauth.schemas.ts`), and the redirect URI must match one registered on the
-> app exactly, so the consent page rejects `http://127.0.0.1:<port>/callback`
-> today. `tmh login --partner-app` works once the API allows loopback
-> redirect URIs for native apps (RFC 8252 §7.3), with any port. Until then
-> it can only be used against a deployment that does.
-
-Sandbox has no published consent page yet, so pass its URL:
-`tmh login --partner-app --authorize-url https://…/oauth/authorize`.
-
-Every command on a Partner app profile exchanges the Refresh token once for
-an Access token. Each exchange returns a new Refresh token and presenting an
-old one revokes the Grant, so `tmh`:
-
-- stores the new Refresh token before it sends the API request, and stops
-  with an error if it can't;
-- never retries an exchange: after a network failure the token may already
-  be rotated, so run `tmh login --partner-app` again if the next command
-  fails with `invalid_grant`;
-- holds a lock file in the config directory during the exchange, so two
-  `tmh` processes never present the same Refresh token.
-
-`invalid_grant` means the admin disconnected the app or the Grant was revoked
-for token reuse; run `tmh login --partner-app` again. `tmh logout` removes
-the Grant from this machine.
-
 ### Profiles
 
 Credentials belong to one Environment, so `tmh` has one profile for each:
@@ -466,12 +416,10 @@ readable only by you.
 
 | File | Holds |
 |---|---|
-| `config.toml` | Each profile's client id and Organization id, and whether it holds a Partner app's Grant. A client secret, Refresh token or local Signing secret is here only when the OS keyring is unusable. |
+| `config.toml` | Each profile's client id and Organization id. A client secret or local Signing secret is here only when the OS keyring is unusable. |
 | `state.toml` | When the version check last ran, and where `events tail` stopped for each profile and Organization. |
 
-Secrets live in the OS keyring under the service name `tmh`. A profile with a
-Partner app Grant also has an empty `.<profile>-grant.lock` file, which `tmh`
-locks while it exchanges the Grant's Refresh token.
+Secrets live in the OS keyring under the service name `tmh`.
 
 ## Privacy
 
@@ -481,9 +429,7 @@ connects only to:
 1. the TeachMeHIPAA API, for the commands you run;
 2. the version check's GitHub releases API, unless you turn it off;
 3. what you ask for yourself: your `--forward-to` URL, which gets nothing
-   but the forwarded Event, and, during `tmh login --partner-app`, the
-   consent page in your browser, which comes back to a server `tmh` runs on
-   `127.0.0.1` only for that login.
+   but the forwarded Event.
 
 The version check asks
 `https://api.github.com/repos/TeachMeHIPAA/teachmehipaa-cli/releases/latest`

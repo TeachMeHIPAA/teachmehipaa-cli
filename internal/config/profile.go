@@ -8,9 +8,6 @@ type Profile struct {
 	// Environment is the glossary name: Sandbox or Live.
 	Environment string
 	BaseURL     string
-	// AuthorizeURL is the console's consent page for Partner app logins,
-	// or "" where none is published.
-	AuthorizeURL string
 }
 
 // The two profiles, one per Environment.
@@ -18,10 +15,7 @@ var (
 	// Sandbox is for testing; it is the default.
 	Sandbox = Profile{Name: "sandbox", Environment: "Sandbox", BaseURL: "https://api-teachmehipaa-dev.web.app/v1"}
 	// Live is production.
-	Live = Profile{
-		Name: "live", Environment: "Live", BaseURL: "https://api.tme.so/v1",
-		AuthorizeURL: "https://console.teachmehipaa.com/oauth/authorize",
-	}
+	Live = Profile{Name: "live", Environment: "Live", BaseURL: "https://api.tme.so/v1"}
 )
 
 // Default is Sandbox, so nobody reaches Live by accident.

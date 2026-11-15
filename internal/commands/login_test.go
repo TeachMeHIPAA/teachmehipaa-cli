@@ -183,3 +183,70 @@ func readConfig(t *testing.T, env *testkit.Env) string {
 	}
 	return string(raw)
 }
+
+func TestLoginTakesOnlyAnAPIClient(t *testing.T) {
+	for _, flag := range []string{"--partner-app", "--scopes=learners:read", "--redirect-port=8765", "--authorize-url=https://example.com"} {
+		t.Run(flag, func(t *testing.T) {
+			env := testkit.NewEnv(t)
+			env.Stdin = testkit.ClientSecret
+
+			result := env.Run("login", "--client-id", testkit.ClientID, flag)
+
+			if result.ExitCode != 1 {
+				t.Errorf("exit code = %d, want 1 (usage)", result.ExitCode)
+			}
+			name, _, _ := strings.Cut(flag, "=")
+			if !strings.Contains(result.Stderr, "unknown flag: "+name) {
+				t.Errorf("stderr = %q, want an unknown flag error for %s", result.Stderr, name)
+			}
+			if routes := env.Transport.Routes(); len(routes) != 0 {
+				t.Errorf("routes = %v, want none", routes)
+			}
+		})
+	}
+}
+
+// A config.toml written by an older tmh may hold keys this one no longer
+// knows, such as a Partner app profile's, and must keep working.
+func TestAConfigFileWithUnknownKeysStillWorks(t *testing.T) {
+	env := testkit.NewEnv(t)
+	config := `future_setting = "on"
+
+[profiles.sandbox]
+client_id = "` + testkit.ClientID + `"
+organization_id = "` + testkit.OrgID + `"
+partner_app = true
+client_secret = "` + testkit.ClientSecret + `"
+refresh_token = "tmh_rt_grt_01JD8A2B3C4D5E6F7G8H9J0K1M.old-entropy"
+another_future_key = 3
+
+[future_table]
+key = "value"
+`
+	if err := os.WriteFile(filepath.Join(env.ConfigDir, "config.toml"), []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env.Transport.
+		Script(testkit.TokenRoute, testkit.TokenReply("jwt-1", 900), testkit.TokenReply("jwt-2", 900)).
+		Script(testkit.IntrospectionRoute, testkit.IntrospectionReply("test")).
+		Script(testkit.LearnerRoute, testkit.JSON(testkit.LearnerBody))
+
+	retrieve := env.Run("learners", "retrieve", testkit.LearnerID)
+
+	if retrieve.ExitCode != 0 {
+		t.Fatalf("retrieve exit code = %d, stderr = %q", retrieve.ExitCode, retrieve.Stderr)
+	}
+	if token := env.Transport.Requests()[0]; token.Body != "grant_type=client_credentials" {
+		t.Errorf("token request body = %q, want the client-credentials grant", token.Body)
+	}
+
+	env.Stdin = testkit.ClientSecret
+	login := env.Run("login", "--client-id", testkit.ClientID)
+
+	if login.ExitCode != 0 {
+		t.Fatalf("login exit code = %d, stderr = %q", login.ExitCode, login.Stderr)
+	}
+	if rewritten := readConfig(t, env); strings.Contains(rewritten, "refresh_token") || strings.Contains(rewritten, "partner_app") {
+		t.Errorf("login kept the old Partner app keys:\n%s", rewritten)
+	}
+}

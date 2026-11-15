@@ -39,10 +39,6 @@ type Config struct {
 	// Trace, when set, sees every HTTP attempt, retries and token mints
 	// included.
 	Trace func(Exchange)
-	// Grant, when set, makes ClientID and ClientSecret a Partner app's and
-	// mints Access tokens from the Grant's Refresh token instead of the
-	// client-credentials grant.
-	Grant GrantStore
 }
 
 // Client lives for one command, so its Access token is cached only in memory.
@@ -271,14 +267,8 @@ func (c *Client) accessToken(ctx context.Context) (string, error) {
 	if c.token != "" && c.config.Clock.Now().Before(c.tokenExpiresAt.Add(-remintMargin)) {
 		return c.token, nil
 	}
-	if c.config.Grant != nil {
-		if err := c.refresh(ctx); err != nil {
-			return "", err
-		}
-		return c.token, nil
-	}
-	// Each mint returns a fresh token, so unlike a Refresh token exchange
-	// (ADR-0004) one whose outcome is unknown may be repeated.
+	// Each mint returns a fresh token, so one whose outcome is unknown may be
+	// repeated.
 	for retry := 1; ; retry++ {
 		err := c.mint(ctx)
 		if err == nil {
@@ -304,12 +294,10 @@ func (c *Client) mint(ctx context.Context) error {
 	return nil
 }
 
-// tokenResponse is what every grant type answers with; only the
-// `authorization_code` and `refresh_token` grants include RefreshToken.
+// tokenResponse is the client-credentials grant's answer.
 type tokenResponse struct {
-	AccessToken  string   `json:"access_token"`
-	RefreshToken string   `json:"refresh_token"`
-	ExpiresIn    *float64 `json:"expires_in"`
+	AccessToken string   `json:"access_token"`
+	ExpiresIn   *float64 `json:"expires_in"`
 }
 
 // parseTokenResponse reads a successful token response, or the OAuth error

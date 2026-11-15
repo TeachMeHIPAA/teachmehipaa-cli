@@ -5,7 +5,6 @@ package cmdutil
 
 import (
 	"bufio"
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -133,7 +132,7 @@ func (f *Factory) Profile() (config.Profile, error) {
 	return profile, nil
 }
 
-// Store is where credentials and Grants are kept on this machine.
+// Store is where credentials are kept on this machine.
 func (f *Factory) Store() config.Store {
 	return config.Store{Keyring: f.Keyring, Dir: f.ConfigDir}
 }
@@ -220,18 +219,13 @@ func (f *Factory) requestProfile() (config.Profile, error) {
 }
 
 // NewAPIClient builds a client for the given credentials with the request
-// flags applied, refreshing through the profile's Grant for a Partner app.
+// flags applied.
 func (f *Factory) NewAPIClient(profile config.Profile, credentials config.Credentials) *api.Client {
 	var trace func(api.Exchange)
 	if f.verbose || f.showHeaders {
 		trace = func(exchange api.Exchange) { writeExchange(f.Stderr, exchange, f.showHeaders) }
 	}
-	var grant api.GrantStore
-	if credentials.PartnerApp {
-		grant = grantStore{store: f.Store(), profile: profile.Name}
-	}
 	return api.New(api.Config{
-		Grant:          grant,
 		BaseURL:        profile.BaseURL,
 		ClientID:       credentials.ClientID,
 		ClientSecret:   credentials.ClientSecret,
@@ -243,20 +237,6 @@ func (f *Factory) NewAPIClient(profile config.Profile, credentials config.Creden
 		MaxRetries:     f.maxRetries,
 		Trace:          trace,
 	})
-}
-
-// grantStore is a profile's Grant in the config store.
-type grantStore struct {
-	store   config.Store
-	profile string
-}
-
-func (g grantStore) Lock(ctx context.Context) (func(), error) {
-	return g.store.LockGrant(ctx, g.profile)
-}
-func (g grantStore) RefreshToken() (string, error) { return g.store.RefreshToken(g.profile) }
-func (g grantStore) SaveRefreshToken(token string) error {
-	return g.store.SaveRefreshToken(g.profile, token)
 }
 
 // UserAgent is the only thing tmh says about itself (ADR-0007).
