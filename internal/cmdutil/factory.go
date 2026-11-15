@@ -39,16 +39,20 @@ type Deps struct {
 	// ReadSecret reads a secret without echoing it. Nil reads a line from
 	// Stdin, which is what tests and pipes need.
 	ReadSecret func() (string, error)
-	// ConfigDir holds config.toml, normally os.UserConfigDir()/tmh.
+	// ConfigDir holds config.toml, normally config.DefaultDir().
 	ConfigDir string
 }
 
 // Factory is shared by every command in one invocation.
 type Factory struct {
 	Deps
-	profileName string
-	live        bool
-	stdin       *bufio.Reader
+	profileName    string
+	live           bool
+	maxRetries     int
+	idempotencyKey string
+	verbose        bool
+	showHeaders    bool
+	stdin          *bufio.Reader
 }
 
 func NewFactory(deps Deps) *Factory {
@@ -59,6 +63,24 @@ func NewFactory(deps Deps) *Factory {
 func (f *Factory) BindProfileFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&f.profileName, "profile", "", `profile to use: "sandbox" (default) or "live"`)
 	flags.BoolVar(&f.live, "live", false, `use the "live" profile`)
+}
+
+// BindRequestFlags adds the flags every API request honors.
+func (f *Factory) BindRequestFlags(flags *pflag.FlagSet) {
+	flags.IntVar(&f.maxRetries, "max-retries", 2, "times to retry a transient failure of a request that is safe to replay")
+	flags.StringVar(&f.idempotencyKey, "idempotency-key", "", "Idempotency-Key for the write, instead of a generated one")
+	flags.BoolVar(&f.verbose, "verbose", false, "print method, path, status, latency and request id of each HTTP attempt to stderr")
+	flags.BoolVar(&f.showHeaders, "show-headers", false, "print each HTTP response's status and headers to stderr")
+}
+
+// IdempotencyKey is the key for the command's write: --idempotency-key, or
+// when the operation requires a key, a UUIDv4 generated once per command so
+// every retry carries the same one. It is empty otherwise.
+func (f *Factory) IdempotencyKey(required bool) string {
+	if f.idempotencyKey == "" && required {
+		f.idempotencyKey = newUUIDv4()
+	}
+	return f.idempotencyKey
 }
 
 // UsageError is a mistake in how tmh was invoked.
@@ -127,6 +149,9 @@ func (f *Factory) Credentials(profile config.Profile) (config.Credentials, error
 
 // APIClient builds a client for the selected profile's credentials.
 func (f *Factory) APIClient() (*api.Client, config.Profile, error) {
+	if f.maxRetries < 0 {
+		return nil, config.Profile{}, &UsageError{Message: "--max-retries must be 0 or more"}
+	}
 	profile, err := f.Profile()
 	if err != nil {
 		return nil, profile, err
@@ -139,6 +164,10 @@ func (f *Factory) APIClient() (*api.Client, config.Profile, error) {
 }
 
 func (f *Factory) NewAPIClient(profile config.Profile, credentials config.Credentials) *api.Client {
+	var trace func(api.Exchange)
+	if f.verbose || f.showHeaders {
+		trace = func(exchange api.Exchange) { writeExchange(f.Stderr, exchange, f.showHeaders) }
+	}
 	return api.New(api.Config{
 		BaseURL:        profile.BaseURL,
 		ClientID:       credentials.ClientID,
@@ -148,6 +177,8 @@ func (f *Factory) NewAPIClient(profile config.Profile, credentials config.Creden
 		Clock:          f.Clock,
 		UserAgent:      UserAgent(),
 		Timeout:        80 * time.Second,
+		MaxRetries:     f.maxRetries,
+		Trace:          trace,
 	})
 }
 
@@ -157,8 +188,12 @@ func UserAgent() string {
 		version.Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
-// PrintJSON writes an API response body to stdout.
+// PrintJSON writes an API response body to stdout; a 204's empty body
+// prints nothing.
 func (f *Factory) PrintJSON(body []byte) error {
+	if len(body) == 0 {
+		return nil
+	}
 	_, noColor := f.LookupEnv("NO_COLOR")
 	return output.JSON(f.Stdout, body, output.Style{
 		Pretty: f.StdoutIsTTY,

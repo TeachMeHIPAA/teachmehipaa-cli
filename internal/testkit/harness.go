@@ -12,11 +12,24 @@ import (
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/keyring"
 )
 
-// Clock is a settable clock.
-type Clock struct{ now time.Time }
+// Clock is a settable clock whose Sleep returns at once, moving time on and
+// recording how long it was asked to wait.
+type Clock struct {
+	now    time.Time
+	sleeps []time.Duration
+}
 
 func (c *Clock) Now() time.Time          { return c.now }
 func (c *Clock) Advance(d time.Duration) { c.now = c.now.Add(d) }
+
+func (c *Clock) Sleep(_ context.Context, d time.Duration) error {
+	c.sleeps = append(c.sleeps, d)
+	c.Advance(d)
+	return nil
+}
+
+// Sleeps returns every wait in order.
+func (c *Clock) Sleeps() []time.Duration { return append([]time.Duration(nil), c.sleeps...) }
 
 // Env is one machine: its keyring, config dir, environment variables and
 // terminal. Successive Runs share it, so `login` then `learners retrieve`

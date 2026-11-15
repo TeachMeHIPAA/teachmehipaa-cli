@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -41,6 +42,7 @@ func NewRoot(deps cmdutil.Deps) *cobra.Command {
 	root.SetOut(deps.Stdout)
 	root.SetErr(deps.Stderr)
 	f.BindProfileFlags(root.PersistentFlags())
+	f.BindRequestFlags(root.PersistentFlags())
 
 	root.AddCommand(newLoginCommand(f), newLogoutCommand(f), newWhoamiCommand(f))
 	generated.Register(root, f)
@@ -59,13 +61,20 @@ func Execute(ctx context.Context, deps cmdutil.Deps, args []string) int {
 	return exitCode(err)
 }
 
+// renderError never includes a credential: API errors carry only what the
+// response said, and request headers never reach an error.
 func renderError(err error) string {
-	message := "Error: " + err.Error()
+	lines := []string{"Error: " + err.Error()}
 	var apiErr *api.Error
-	if errors.As(err, &apiErr) && apiErr.RequestID != "" {
-		message += "\nRequest ID: " + apiErr.RequestID
+	if errors.As(err, &apiErr) {
+		for _, field := range apiErr.Errors {
+			lines = append(lines, fmt.Sprintf("  %s: %s", field.Path, field.Message))
+		}
+		if apiErr.RequestID != "" {
+			lines = append(lines, "Request ID: "+apiErr.RequestID)
+		}
 	}
-	return message
+	return strings.Join(lines, "\n")
 }
 
 func exitCode(err error) int {
@@ -87,7 +96,7 @@ func exitCodeForStatus(err *api.Error) int {
 	switch {
 	case err.Status == 429:
 		return exitRateLimited
-	case err.Status >= 500 || (err.Status >= 200 && err.Status < 300):
+	case err.UnexpectedBody || err.Status >= 500 || (err.Status >= 200 && err.Status < 300):
 		return exitServer
 	case err.OAuth || err.Status == 401 || err.Status == 403:
 		return exitAuth

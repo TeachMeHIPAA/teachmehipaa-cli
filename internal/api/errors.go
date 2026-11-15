@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime"
 	"net/http"
@@ -27,9 +28,13 @@ type Error struct {
 	Errors []FieldError
 	// RequestID is what TeachMeHIPAA support asks for.
 	RequestID string
-	// OAuth marks a failure from the token endpoint.
-	OAuth   bool
-	message string
+	Header    http.Header
+	// OAuth marks an RFC 6749 error body from the token endpoint.
+	OAuth bool
+	// UnexpectedBody means the body wasn't JSON, such as the HTML page a
+	// wrong base URL answers with.
+	UnexpectedBody bool
+	message        string
 }
 
 func (e *Error) Error() string { return e.message }
@@ -53,7 +58,7 @@ func notJSONMessage(status int, header http.Header) string {
 }
 
 func problemError(status int, header http.Header, body []byte) *Error {
-	e := &Error{Status: status, RequestID: header.Get("X-Request-Id")}
+	e := &Error{Status: status, RequestID: header.Get("X-Request-Id"), Header: header}
 	var problem struct {
 		Code   string       `json:"code"`
 		Title  string       `json:"title"`
@@ -61,6 +66,7 @@ func problemError(status int, header http.Header, body []byte) *Error {
 		Errors []FieldError `json:"errors"`
 	}
 	if !isJSON(header) || json.Unmarshal(body, &problem) != nil {
+		e.UnexpectedBody = true
 		e.message = notJSONMessage(status, header)
 		return e
 	}
@@ -72,22 +78,54 @@ func problemError(status int, header http.Header, body []byte) *Error {
 	return e
 }
 
+// oauthError reads the token endpoint's `{error, error_description}`; any
+// other body from it, such as a gateway's 502 page, maps like any response.
 func oauthError(status int, header http.Header, body []byte) *Error {
-	e := &Error{Status: status, RequestID: header.Get("X-Request-Id"), OAuth: true}
 	var oauth struct {
 		Error       string `json:"error"`
 		Description string `json:"error_description"`
 	}
 	if !isJSON(header) || json.Unmarshal(body, &oauth) != nil || oauth.Error == "" {
-		e.message = notJSONMessage(status, header)
-		if isJSON(header) {
-			e.message = fmt.Sprintf("the token endpoint responded with HTTP %d", status)
-		}
-		return e
+		return problemError(status, header, body)
 	}
-	e.Code, e.Detail = oauth.Error, oauth.Description
-	e.message = joinNonEmpty(oauth.Error, oauth.Description)
-	return e
+	return &Error{
+		Status:    status,
+		Code:      oauth.Error,
+		Detail:    oauth.Description,
+		RequestID: header.Get("X-Request-Id"),
+		Header:    header,
+		OAuth:     true,
+		message:   joinNonEmpty(oauth.Error, oauth.Description),
+	}
+}
+
+// isTransient is a failure that left no trace on the server, or one the
+// server asks us to retry.
+func isTransient(err error) bool {
+	var connectionErr *ConnectionError
+	if errors.As(err, &connectionErr) {
+		return true
+	}
+	var apiErr *Error
+	return errors.As(err, &apiErr) && (apiErr.Status == http.StatusTooManyRequests ||
+		(apiErr.Status == http.StatusConflict && apiErr.Code == "conflict") ||
+		apiErr.Status >= 500)
+}
+
+// isMintRetryable leaves out 4xx answers such as `invalid_client`: asking
+// again with the same credentials gets the same answer.
+func isMintRetryable(err error) bool {
+	var connectionErr *ConnectionError
+	if errors.As(err, &connectionErr) {
+		return true
+	}
+	var apiErr *Error
+	return errors.As(err, &apiErr) && apiErr.Status >= 500 && apiErr.Code != "invalid_client"
+}
+
+func isUnauthorized(err error) bool {
+	var apiErr *Error
+	return errors.As(err, &apiErr) && apiErr.Status == http.StatusUnauthorized && apiErr.Code == "unauthorized"
 }
 
 func joinNonEmpty(parts ...string) string {

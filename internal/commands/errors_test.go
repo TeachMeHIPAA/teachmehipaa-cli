@@ -2,6 +2,7 @@ package commands_test
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/testkit"
@@ -57,7 +58,8 @@ func TestAPIFailuresGoToStderrWithTheRequestID(t *testing.T) {
 
 func TestNoResponseIsAConnectionFailure(t *testing.T) {
 	env := loggedInByEnvironment(t)
-	env.Transport.Script(testkit.LearnerRoute, testkit.Reply{Err: errors.New("connection refused")})
+	refused := testkit.Reply{Err: errors.New("connection refused")}
+	env.Transport.Script(testkit.LearnerRoute, refused, refused, refused)
 
 	result := env.Run("learners", "retrieve", testkit.LearnerID)
 
@@ -68,5 +70,45 @@ func TestNoResponseIsAConnectionFailure(t *testing.T) {
 		testkit.LearnerID + `": connection refused` + "\n"
 	if result.Stderr != want {
 		t.Errorf("stderr = %q, want %q", result.Stderr, want)
+	}
+}
+
+func TestFieldErrorsArePrintedUnderTheTitle(t *testing.T) {
+	env := loggedInByEnvironment(t)
+	env.Transport.Script(testkit.RemindRoute, testkit.Reply{
+		Status: 422,
+		Header: map[string]string{"Content-Type": "application/problem+json", "X-Request-Id": "req-422"},
+		Body: `{"code":"validation_failed","title":"Validation failed","status":422,"detail":"The request has invalid fields.",` +
+			`"errors":[{"path":"Idempotency-Key","message":"Required"},{"path":"learner.email","message":"Invalid email"}]}`,
+	})
+
+	result := env.Run("enrollments", "remind", testkit.EnrollmentID)
+
+	if result.ExitCode != 5 {
+		t.Errorf("exit code = %d, want 5", result.ExitCode)
+	}
+	want := "Error: Validation failed: The request has invalid fields.\n" +
+		"  Idempotency-Key: Required\n" +
+		"  learner.email: Invalid email\n" +
+		"Request ID: req-422\n"
+	if result.Stderr != want {
+		t.Errorf("stderr = %q, want %q", result.Stderr, want)
+	}
+}
+
+func TestNoErrorShowsTheClientSecretOrAccessToken(t *testing.T) {
+	env := loggedInByEnvironment(t)
+	env.Transport.Script(testkit.LearnerRoute, problem(401, "unauthorized"))
+	env.Transport.Script(testkit.TokenRoute, testkit.Reply{Status: 401, Body: `{"error":"invalid_client"}`})
+
+	result := env.Run("learners", "retrieve", testkit.LearnerID, "--verbose", "--show-headers")
+
+	if result.ExitCode != 2 {
+		t.Errorf("exit code = %d, want 2", result.ExitCode)
+	}
+	for _, secret := range []string{testkit.ClientSecret, "jwt-1", "Bearer", "Basic"} {
+		if strings.Contains(result.Stderr, secret) {
+			t.Errorf("stderr shows %q:\n%s", secret, result.Stderr)
+		}
 	}
 }

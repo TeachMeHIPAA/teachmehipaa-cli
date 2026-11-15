@@ -7,20 +7,20 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 
 	"golang.org/x/term"
 
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/clock"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/cmdutil"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/commands"
+	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/config"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/keyring"
 )
 
 func main() {
-	configDir, err := os.UserConfigDir()
+	configDir, err := config.DefaultDir(os.LookupEnv, os.UserHomeDir)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error: no user config directory:", err)
+		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -35,7 +35,7 @@ func main() {
 		StdinIsTTY:  term.IsTerminal(int(os.Stdin.Fd())),
 		StdoutIsTTY: term.IsTerminal(int(os.Stdout.Fd())),
 		ReadSecret:  readHiddenSecret,
-		ConfigDir:   filepath.Join(configDir, "tmh"),
+		ConfigDir:   configDir,
 	}, os.Args[1:])
 	stop()
 	os.Exit(code)
