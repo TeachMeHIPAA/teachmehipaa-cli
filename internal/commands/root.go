@@ -13,7 +13,6 @@ import (
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/api"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/cmdutil"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/commands/generated"
-	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/version"
 )
 
 // Exit codes from the CLI spec.
@@ -28,16 +27,31 @@ const (
 	exitServer      = 7
 )
 
-// NewRoot builds `tmh` with every subcommand wired to deps.
-func NewRoot(deps cmdutil.Deps) *cobra.Command {
+// newRoot builds `tmh` with every subcommand wired to deps; the command that
+// runs starts the release check in notice.
+func newRoot(deps cmdutil.Deps, notice *updateNotice) *cobra.Command {
 	f := cmdutil.NewFactory(deps)
 	root := &cobra.Command{
-		Use:           "tmh",
-		Short:         "Work with the TeachMeHIPAA Developer API from your terminal",
-		Version:       version.Version,
+		Use:   "tmh",
+		Short: "Work with the TeachMeHIPAA Developer API from your terminal",
+		Long: `Work with the TeachMeHIPAA Developer API from your terminal.
+
+Shell completion: load it in your shell's startup file with one of
+  source <(tmh completion bash)
+  source <(tmh completion zsh)
+  tmh completion fish | source
+  tmh completion powershell | Out-String | Invoke-Expression
+See "tmh completion <shell> --help" to install it permanently.`,
+		Version:       deps.Build.Version,
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+			notice.start(cmd)
+		},
 	}
+	// Cobra renders this as a template; quoting braces keeps the build info
+	// literal.
+	root.SetVersionTemplate(strings.NewReplacer("{", "{{`{`}}", "}", "{{`}`}}").Replace(versionLine(deps.Build)))
 	root.SetIn(deps.Stdin)
 	root.SetOut(deps.Stdout)
 	root.SetErr(deps.Stderr)
@@ -45,19 +59,22 @@ func NewRoot(deps cmdutil.Deps) *cobra.Command {
 	f.BindRequestFlags(root.PersistentFlags())
 
 	root.AddCommand(newLoginCommand(f), newLogoutCommand(f), newWhoamiCommand(f))
+	root.AddCommand(newRawCommands(f)...)
+	root.AddCommand(newOpenCommand(f), newVersionCommand(deps.Build))
 	generated.Register(root, f)
 	return root
 }
 
 // Execute runs `tmh <args>` and returns the process exit code.
 func Execute(ctx context.Context, deps cmdutil.Deps, args []string) int {
-	root := NewRoot(deps)
+	notice := &updateNotice{deps: deps}
+	root := newRoot(deps, notice)
 	root.SetArgs(args)
 	err := root.ExecuteContext(ctx)
-	if err == nil {
-		return exitOK
+	if err != nil {
+		fmt.Fprintln(deps.Stderr, renderError(err))
 	}
-	fmt.Fprintln(deps.Stderr, renderError(err))
+	notice.finish()
 	return exitCode(err)
 }
 
@@ -82,6 +99,8 @@ func exitCode(err error) int {
 	var connectionErr *api.ConnectionError
 	var notLoggedIn *cmdutil.NotLoggedInError
 	switch {
+	case err == nil:
+		return exitOK
 	case errors.As(err, &notLoggedIn):
 		return exitAuth
 	case errors.As(err, &connectionErr):

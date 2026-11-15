@@ -20,6 +20,8 @@ type Reply struct {
 	Before func()
 	// Err fails the request with no response, like a refused connection.
 	Err error
+	// Hang never answers; the request fails only when its context ends.
+	Hang bool
 }
 
 // JSON scripts a 200 JSON reply.
@@ -102,6 +104,10 @@ func (f *Transport) RoundTrip(r *http.Request) (*http.Response, error) {
 
 	if next.Before != nil {
 		next.Before()
+	}
+	if next.Hang {
+		<-r.Context().Done()
+		return nil, r.Context().Err()
 	}
 	if next.Err != nil {
 		return nil, next.Err

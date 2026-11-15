@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 
@@ -114,23 +115,27 @@ func (s Store) read() (fileConfig, error) {
 	return config, nil
 }
 
-// write replaces the file atomically; CreateTemp makes it 0600, so a secret
-// is never readable by others, even briefly.
 func (s Store) write(config fileConfig) error {
-	if err := os.MkdirAll(s.Dir, 0o700); err != nil {
+	return writeTOML(s.Dir, s.Path(), config)
+}
+
+// writeTOML replaces path atomically; CreateTemp makes it 0600, so a secret
+// is never readable by others, even briefly.
+func writeTOML(dir, path string, value any) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	file, err := os.CreateTemp(s.Dir, ".config-*.toml")
+	file, err := os.CreateTemp(dir, "."+strings.TrimSuffix(filepath.Base(path), ".toml")+"-*.toml")
 	if err != nil {
 		return err
 	}
 	defer os.Remove(file.Name())
-	if err := toml.NewEncoder(file).Encode(config); err != nil {
+	if err := toml.NewEncoder(file).Encode(value); err != nil {
 		file.Close()
 		return err
 	}
 	if err := file.Close(); err != nil {
 		return err
 	}
-	return os.Rename(file.Name(), s.Path())
+	return os.Rename(file.Name(), path)
 }

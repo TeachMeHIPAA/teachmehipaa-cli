@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"runtime"
 
 	"golang.org/x/term"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/commands"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/config"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/keyring"
+	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/version"
 )
 
 func main() {
@@ -34,8 +37,11 @@ func main() {
 		LookupEnv:   os.LookupEnv,
 		StdinIsTTY:  term.IsTerminal(int(os.Stdin.Fd())),
 		StdoutIsTTY: term.IsTerminal(int(os.Stdout.Fd())),
+		StderrIsTTY: term.IsTerminal(int(os.Stderr.Fd())),
 		ReadSecret:  readHiddenSecret,
 		ConfigDir:   configDir,
+		OpenBrowser: browserOpener(runtime.GOOS, exec.LookPath),
+		Build:       version.Current(),
 	}, os.Args[1:])
 	stop()
 	os.Exit(code)
@@ -46,4 +52,23 @@ func readHiddenSecret() (string, error) {
 	// The newline the person typed was never echoed.
 	fmt.Fprintln(os.Stderr)
 	return string(secret), err
+}
+
+// browserOpener uses the OS's URL handler, or returns nil when there is
+// none, such as on a server without xdg-open.
+func browserOpener(goos string, lookPath func(string) (string, error)) func(string) error {
+	name, args := "xdg-open", []string{}
+	switch goos {
+	case "darwin":
+		name = "open"
+	case "windows":
+		name, args = "rundll32", []string{"url.dll,FileProtocolHandler"}
+	}
+	path, err := lookPath(name)
+	if err != nil {
+		return nil
+	}
+	return func(url string) error {
+		return exec.Command(path, append(args, url)...).Run()
+	}
 }

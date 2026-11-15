@@ -10,6 +10,7 @@ import (
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/cmdutil"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/commands"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/keyring"
+	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/version"
 )
 
 // Clock is a settable clock whose Sleep returns at once, moving time on and
@@ -44,6 +45,15 @@ type Env struct {
 	Stdin       string
 	StdinIsTTY  bool
 	StdoutIsTTY bool
+	StderrIsTTY bool
+	// Opened is every URL handed to the browser, in order.
+	Opened []string
+	// NoBrowser leaves tmh without a way to open one.
+	NoBrowser bool
+	// BrowserErr makes opening a URL fail.
+	BrowserErr error
+	// Build is the tmh build under test.
+	Build version.Info
 }
 
 func NewEnv(t testing.TB) *Env {
@@ -53,6 +63,7 @@ func NewEnv(t testing.TB) *Env {
 		Clock:     &Clock{now: time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)},
 		ConfigDir: t.TempDir(),
 		Vars:      map[string]string{},
+		Build:     version.Info{Version: "1.2.0", Commit: "abc1234", Date: "2026-11-01T00:00:00Z"},
 	}
 }
 
@@ -76,9 +87,22 @@ func (e *Env) Run(args ...string) Result {
 		LookupEnv:   e.lookup,
 		StdinIsTTY:  e.StdinIsTTY,
 		StdoutIsTTY: e.StdoutIsTTY,
+		StderrIsTTY: e.StderrIsTTY,
 		ConfigDir:   e.ConfigDir,
+		OpenBrowser: e.openBrowser(),
+		Build:       e.Build,
 	}, args)
 	return Result{Stdout: stdout.String(), Stderr: stderr.String(), ExitCode: code}
+}
+
+func (e *Env) openBrowser() func(string) error {
+	if e.NoBrowser {
+		return nil
+	}
+	return func(url string) error {
+		e.Opened = append(e.Opened, url)
+		return e.BrowserErr
+	}
 }
 
 func (e *Env) lookup(name string) (string, bool) {

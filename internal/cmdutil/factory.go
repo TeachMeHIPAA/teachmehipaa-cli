@@ -36,11 +36,18 @@ type Deps struct {
 	StdinIsTTY bool
 	// StdoutIsTTY selects pretty, colored output over compact JSON.
 	StdoutIsTTY bool
+	// StderrIsTTY means a person sees stderr, so notices are worth printing.
+	StderrIsTTY bool
 	// ReadSecret reads a secret without echoing it. Nil reads a line from
 	// Stdin, which is what tests and pipes need.
 	ReadSecret func() (string, error)
 	// ConfigDir holds config.toml, normally config.DefaultDir().
 	ConfigDir string
+	// OpenBrowser opens a URL in the person's browser; nil when there is no
+	// way to.
+	OpenBrowser func(url string) error
+	// Build is this binary's version, normally version.Current().
+	Build version.Info
 }
 
 // Factory is shared by every command in one invocation.

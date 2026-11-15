@@ -71,6 +71,11 @@ type Request struct {
 	// IdempotencyKey is sent as the Idempotency-Key header when set. It is
 	// fixed per call, so every retry carries the same key.
 	IdempotencyKey string
+	// Body is sent with ContentType when non-nil, unchanged on every retry.
+	Body        []byte
+	ContentType string
+	// IfMatch is sent as the If-Match header when set.
+	IfMatch string
 }
 
 // retrySafe never counts a key on PATCH or DELETE: those may have taken
@@ -157,9 +162,19 @@ func (c *Client) Do(ctx context.Context, request Request) (*Response, error) {
 }
 
 func (c *Client) exchange(ctx context.Context, request Request, target, token string) (*Response, error) {
-	httpRequest, err := http.NewRequestWithContext(ctx, request.Method, target, nil)
+	var requestBody io.Reader
+	if request.Body != nil {
+		requestBody = bytes.NewReader(request.Body)
+	}
+	httpRequest, err := http.NewRequestWithContext(ctx, request.Method, target, requestBody)
 	if err != nil {
 		return nil, err
+	}
+	if request.Body != nil {
+		httpRequest.Header.Set("Content-Type", request.ContentType)
+	}
+	if request.IfMatch != "" {
+		httpRequest.Header.Set("If-Match", request.IfMatch)
 	}
 	httpRequest.Header.Set("Authorization", "Bearer "+token)
 	httpRequest.Header.Set("Accept", "application/json")
