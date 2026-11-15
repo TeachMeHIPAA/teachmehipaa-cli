@@ -1,0 +1,183 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# Release config for tmh. Nothing here publishes on its own: the Release
+# workflow runs `goreleaser release --snapshot` unless dispatched with
+# publish=true from a v* tag. See CONTRIBUTING.md.
+version: 2
+
+project_name: tmh
+
+before:
+  hooks:
+    - ./scripts/completions.sh
+
+builds:
+  - id: tmh
+    main: ./cmd/tmh
+    binary: tmh
+    env:
+      # go-keyring shells out to /usr/bin/security on macOS, so even the
+      # keychain needs no cgo and every target is a static binary.
+      - CGO_ENABLED=0
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/TeachMeHIPAA/teachmehipaa-cli/internal/version.Version={{ .Version }}
+      - -X github.com/TeachMeHIPAA/teachmehipaa-cli/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/TeachMeHIPAA/teachmehipaa-cli/internal/version.Date={{ .CommitDate }}
+    # Reproducible: the same commit builds byte-identical binaries.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: tmh
+    ids: [tmh]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+      - completions/*
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
+
+changelog:
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - "^docs(\\(.+\\))?:"
+      - "^test(\\(.+\\))?:"
+      - "^chore(\\(.+\\))?:"
+      - "^ci(\\(.+\\))?:"
+      - "^Merge "
+  groups:
+    - title: Breaking changes
+      regexp: '^.*?\w+(\(.+\))?!:.+$'
+      order: 0
+    - title: Features
+      regexp: '^.*?feat(\(.+\))?:.+$'
+      order: 1
+    - title: Bug fixes
+      regexp: '^.*?fix(\(.+\))?:.+$'
+      order: 2
+    - title: Other changes
+      order: 999
+
+release:
+  github:
+    owner: TeachMeHIPAA
+    name: teachmehipaa-cli
+  prerelease: auto
+
+# The tap and bucket repos are pushed with TAP_GITHUB_TOKEN, a token that can
+# write to both. Without it, nothing is pushed there, so a local or snapshot
+# run never needs the repos to exist.
+homebrew_casks:
+  - name: tmh
+    ids: [tmh]
+    binaries: [tmh]
+    description: Work with the TeachMeHIPAA Developer API from your terminal
+    homepage: https://github.com/TeachMeHIPAA/teachmehipaa-cli
+    license: MIT
+    repository:
+      owner: TeachMeHIPAA
+      name: homebrew-tap
+      token: '{{ envOrDefault "TAP_GITHUB_TOKEN" "" }}'
+    directory: Casks
+    commit_author:
+      name: teachmehipaa-release-bot
+      email: noreply@teachmehipaa.com
+    commit_msg_template: "chore: tmh {{ .Tag }}"
+    skip_upload: '{{ if isEnvSet "TAP_GITHUB_TOKEN" }}auto{{ else }}true{{ end }}'
+    completions:
+      bash: completions/tmh.bash
+      zsh: completions/tmh.zsh
+      fish: completions/tmh.fish
+    # The binary isn't notarized yet, so macOS would quarantine it and
+    # refuse to run it.
+    hooks:
+      post:
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/tmh"]
+          end
+
+scoops:
+  - name: tmh
+    ids: [tmh]
+    description: Work with the TeachMeHIPAA Developer API from your terminal
+    homepage: https://github.com/TeachMeHIPAA/teachmehipaa-cli
+    license: MIT
+    repository:
+      owner: TeachMeHIPAA
+      name: scoop-bucket
+      token: '{{ envOrDefault "TAP_GITHUB_TOKEN" "" }}'
+    directory: bucket
+    commit_author:
+      name: teachmehipaa-release-bot
+      email: noreply@teachmehipaa.com
+    commit_msg_template: "chore: tmh {{ .Tag }}"
+    skip_upload: '{{ if isEnvSet "TAP_GITHUB_TOKEN" }}auto{{ else }}true{{ end }}'
+
+nfpms:
+  - id: tmh
+    ids: [tmh]
+    package_name: tmh
+    file_name_template: "{{ .ConventionalFileName }}"
+    formats: [deb, rpm]
+    vendor: TeachMeHIPAA
+    maintainer: TeachMeHIPAA <support@teachmehipaa.com>
+    homepage: https://github.com/TeachMeHIPAA/teachmehipaa-cli
+    description: Work with the TeachMeHIPAA Developer API from your terminal
+    license: MIT
+    section: utils
+    bindir: /usr/bin
+    contents:
+      - src: completions/tmh.bash
+        dst: /usr/share/bash-completion/completions/tmh
+      - src: completions/tmh.fish
+        dst: /usr/share/fish/vendor_completions.d/tmh.fish
+      - src: README.md
+        dst: /usr/share/doc/tmh/README.md
+      - src: LICENSE
+        dst: /usr/share/doc/tmh/LICENSE
+      # Debian's zsh and Fedora's look for vendor completions in different
+      # places.
+      - src: completions/tmh.zsh
+        dst: /usr/share/zsh/vendor-completions/_tmh
+        packager: deb
+      - src: completions/tmh.zsh
+        dst: /usr/share/zsh/site-functions/_tmh
+        packager: rpm
+
+dockers_v2:
+  - id: tmh
+    ids: [tmh]
+    dockerfile: Dockerfile
+    images:
+      - ghcr.io/teachmehipaa/tmh
+    tags:
+      - "{{ .Version }}"
+      - '{{ if not .Prerelease }}latest{{ end }}'
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      org.opencontainers.image.title: tmh
+      org.opencontainers.image.description: Work with the TeachMeHIPAA Developer API from your terminal
+      org.opencontainers.image.source: https://github.com/TeachMeHIPAA/teachmehipaa-cli
+      org.opencontainers.image.licenses: MIT
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.created: "{{ .CommitDate }}"
