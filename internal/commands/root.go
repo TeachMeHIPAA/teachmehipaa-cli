@@ -13,6 +13,7 @@ import (
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/api"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/cmdutil"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/commands/generated"
+	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/oauth"
 )
 
 // Exit codes from the CLI spec.
@@ -108,12 +109,13 @@ func exitCode(err error) int {
 	var notFound *cmdutil.NotFoundError
 	var operationFailed *api.OperationFailedError
 	var operationTimeout *api.OperationTimeoutError
+	var consentErr *oauth.ConsentError
 	switch {
 	case err == nil:
 		return exitOK
 	case errors.Is(err, context.Canceled):
 		return exitInterrupted
-	case errors.As(err, &notLoggedIn):
+	case errors.As(err, &notLoggedIn), errors.As(err, &consentErr), errors.Is(err, oauth.ErrStateMismatch):
 		return exitAuth
 	case errors.As(err, &notFound):
 		return exitNotFound

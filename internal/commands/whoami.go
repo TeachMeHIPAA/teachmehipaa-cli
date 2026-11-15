@@ -30,6 +30,9 @@ func newWhoamiCommand(f *cmdutil.Factory) *cobra.Command {
 			}
 			fmt.Fprintf(f.Stdout, "Organization  %s\nScopes        %s\nEnvironment   %s\n",
 				organization, strings.Join(introspection.Scopes, ", "), environmentOf(introspection.Mode, profile))
+			if app := client.PartnerAppID(); app != "" {
+				fmt.Fprintf(f.Stdout, "Partner app   %s (Grant)\n", app)
+			}
 			return nil
 		},
 	}

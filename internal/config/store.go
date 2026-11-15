@@ -21,6 +21,9 @@ type Credentials struct {
 	ClientID       string
 	ClientSecret   string
 	OrganizationID string
+	// PartnerApp means the id and secret are a Partner app's, and the
+	// profile holds a Grant's Refresh token, read only under LockGrant.
+	PartnerApp bool
 }
 
 // ErrNotLoggedIn means the profile has no stored credentials.
@@ -45,8 +48,13 @@ type fileConfig struct {
 type fileProfile struct {
 	ClientID       string `toml:"client_id"`
 	OrganizationID string `toml:"organization_id,omitempty"`
+	PartnerApp     bool   `toml:"partner_app,omitempty"`
 	ClientSecret   string `toml:"client_secret,omitempty"`
+	RefreshToken   string `toml:"refresh_token,omitempty"`
 }
+
+// refreshTokenUser is the keyring entry for a profile's Grant.
+func refreshTokenUser(profile string) string { return profile + ":refresh-token" }
 
 func (s Store) Path() string { return filepath.Join(s.Dir, "config.toml") }
 
@@ -63,7 +71,95 @@ func (s Store) Save(profile string, credentials Credentials) (inFile bool, err e
 		inFile = true
 	}
 	config.Profiles[profile] = entry
+	// A Grant this profile held before is replaced, and a stale Refresh
+	// token must not outlive it.
+	_ = s.Keyring.Delete(keyringService, refreshTokenUser(profile))
 	return inFile, s.write(config)
+}
+
+// SaveGrant stores a Partner app's credentials and its Grant's first
+// Refresh token for the profile. It reports whether a secret went to the
+// config file because the keyring was unusable.
+func (s Store) SaveGrant(profile string, credentials Credentials, refreshToken string) (inFile bool, err error) {
+	config, err := s.read()
+	if err != nil {
+		return false, err
+	}
+	entry := fileProfile{ClientID: credentials.ClientID, OrganizationID: credentials.OrganizationID, PartnerApp: true}
+	if s.Keyring.Set(keyringService, profile, credentials.ClientSecret) != nil {
+		entry.ClientSecret = credentials.ClientSecret
+		inFile = true
+	}
+	if s.Keyring.Set(keyringService, refreshTokenUser(profile), refreshToken) != nil {
+		entry.RefreshToken = refreshToken
+		inFile = true
+	}
+	config.Profiles[profile] = entry
+	return inFile, s.write(config)
+}
+
+// SetOrganizationID records the Organization the profile's credentials are
+// bound to.
+func (s Store) SetOrganizationID(profile, organizationID string) error {
+	config, err := s.read()
+	if err != nil {
+		return err
+	}
+	entry, ok := config.Profiles[profile]
+	if !ok {
+		return ErrNotLoggedIn
+	}
+	entry.OrganizationID = organizationID
+	config.Profiles[profile] = entry
+	return s.write(config)
+}
+
+// RefreshToken is the profile's current Grant Refresh token. Read it while
+// holding LockGrant, since another tmh process may have just rotated it.
+func (s Store) RefreshToken(profile string) (string, error) {
+	config, err := s.read()
+	if err != nil {
+		return "", err
+	}
+	entry, ok := config.Profiles[profile]
+	if !ok || !entry.PartnerApp {
+		return "", fmt.Errorf("%w: the %s profile no longer holds a Grant", ErrNotLoggedIn, profile)
+	}
+	// The file copy wins: it exists only when the keyring refused the
+	// latest token, so a keyring copy would be older.
+	if entry.RefreshToken != "" {
+		return entry.RefreshToken, nil
+	}
+	token, err := s.Keyring.Get(keyringService, refreshTokenUser(profile))
+	if err != nil {
+		return "", fmt.Errorf("%w: the %s profile's Refresh token is missing from the OS keyring (%v)",
+			ErrNotLoggedIn, profile, err)
+	}
+	return token, nil
+}
+
+// SaveRefreshToken replaces the profile's Grant Refresh token with the one
+// an exchange returned. An error means the store still holds the superseded
+// token.
+func (s Store) SaveRefreshToken(profile, token string) error {
+	config, err := s.read()
+	if err != nil {
+		return err
+	}
+	entry, ok := config.Profiles[profile]
+	if !ok || !entry.PartnerApp {
+		return fmt.Errorf("the %s profile no longer holds a Grant", profile)
+	}
+	if s.Keyring.Set(keyringService, refreshTokenUser(profile), token) == nil {
+		if entry.RefreshToken == "" {
+			return nil
+		}
+		entry.RefreshToken = ""
+	} else {
+		entry.RefreshToken = token
+	}
+	config.Profiles[profile] = entry
+	return s.write(config)
 }
 
 func (s Store) Load(profile string) (Credentials, error) {
@@ -79,6 +175,7 @@ func (s Store) Load(profile string) (Credentials, error) {
 		ClientID:       entry.ClientID,
 		ClientSecret:   entry.ClientSecret,
 		OrganizationID: entry.OrganizationID,
+		PartnerApp:     entry.PartnerApp,
 	}
 	if credentials.ClientSecret != "" {
 		return credentials, nil
@@ -99,6 +196,7 @@ func (s Store) Delete(profile string) (bool, error) {
 		return false, err
 	}
 	keyringErr := s.Keyring.Delete(keyringService, profile)
+	_ = s.Keyring.Delete(keyringService, refreshTokenUser(profile))
 	_, inFile := config.Profiles[profile]
 	if !inFile {
 		return keyringErr == nil, nil

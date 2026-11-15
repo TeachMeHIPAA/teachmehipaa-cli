@@ -53,6 +53,9 @@ type Env struct {
 	NoBrowser bool
 	// BrowserErr makes opening a URL fail.
 	BrowserErr error
+	// Browser, when set, acts as the person's browser for each opened URL,
+	// such as following a consent redirect to tmh's loopback server.
+	Browser func(url string) error
 	// Build is the tmh build under test.
 	Build version.Info
 	// ForwardTransport carries `--forward-to` requests, normally to an
@@ -114,7 +117,13 @@ func (e *Env) openBrowser() func(string) error {
 	}
 	return func(url string) error {
 		e.Opened = append(e.Opened, url)
-		return e.BrowserErr
+		if e.BrowserErr != nil {
+			return e.BrowserErr
+		}
+		if e.Browser != nil {
+			return e.Browser(url)
+		}
+		return nil
 	}
 }
 

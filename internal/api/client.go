@@ -37,6 +37,10 @@ type Config struct {
 	// Trace, when set, sees every HTTP attempt, retries and token mints
 	// included.
 	Trace func(Exchange)
+	// Grant, when set, makes ClientID and ClientSecret a Partner app's and
+	// mints Access tokens from the Grant's Refresh token instead of the
+	// client-credentials grant.
+	Grant GrantStore
 }
 
 // Client lives for one command, so its Access token is cached only in memory.
@@ -271,6 +275,12 @@ func (c *Client) accessToken(ctx context.Context) (string, error) {
 	if c.token != "" && c.config.Clock.Now().Before(c.tokenExpiresAt.Add(-remintMargin)) {
 		return c.token, nil
 	}
+	if c.config.Grant != nil {
+		if err := c.refresh(ctx); err != nil {
+			return "", err
+		}
+		return c.token, nil
+	}
 	// Each mint returns a fresh token, so unlike a Refresh token exchange
 	// (ADR-0004) one whose outcome is unknown may be repeated.
 	for retry := 1; ; retry++ {
@@ -286,20 +296,7 @@ func (c *Client) accessToken(ctx context.Context) (string, error) {
 
 func (c *Client) mint(ctx context.Context) error {
 	requestedAt := c.config.Clock.Now()
-	form := url.Values{"grant_type": {"client_credentials"}}.Encode()
-	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		c.config.BaseURL+"/auth/token", strings.NewReader(form))
-	if err != nil {
-		return err
-	}
-	// RFC 6749 §2.3.1: Basic credentials are form-encoded before base64.
-	credentials := url.QueryEscape(c.config.ClientID) + ":" + url.QueryEscape(c.config.ClientSecret)
-	httpRequest.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(credentials)))
-	httpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	httpRequest.Header.Set("Accept", "application/json")
-	httpRequest.Header.Set("User-Agent", c.config.UserAgent)
-
-	status, header, body, err := c.send(httpRequest)
+	status, header, body, err := c.postToken(ctx, url.Values{"grant_type": {"client_credentials"}})
 	if err != nil {
 		return err
 	}
@@ -311,9 +308,31 @@ func (c *Client) mint(ctx context.Context) error {
 		json.Unmarshal(body, &token) != nil || token.AccessToken == "" || token.ExpiresIn == nil {
 		return oauthError(status, header, body)
 	}
-	c.token = token.AccessToken
-	c.tokenExpiresAt = requestedAt.Add(time.Duration(*token.ExpiresIn * float64(time.Second)))
+	c.useToken(token.AccessToken, requestedAt, *token.ExpiresIn)
 	return nil
+}
+
+// useToken caches an Access token whose expiry counts from requestedAt.
+func (c *Client) useToken(accessToken string, requestedAt time.Time, expiresIn float64) {
+	c.token = accessToken
+	c.tokenExpiresAt = requestedAt.Add(time.Duration(expiresIn * float64(time.Second)))
+}
+
+// postToken sends one form to the token endpoint, authenticated with the
+// client's id and secret.
+func (c *Client) postToken(ctx context.Context, form url.Values) (int, http.Header, []byte, error) {
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.config.BaseURL+"/auth/token", strings.NewReader(form.Encode()))
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	// RFC 6749 §2.3.1: Basic credentials are form-encoded before base64.
+	credentials := url.QueryEscape(c.config.ClientID) + ":" + url.QueryEscape(c.config.ClientSecret)
+	httpRequest.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(credentials)))
+	httpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	httpRequest.Header.Set("Accept", "application/json")
+	httpRequest.Header.Set("User-Agent", c.config.UserAgent)
+	return c.send(httpRequest)
 }
 
 func (c *Client) send(request *http.Request) (int, http.Header, []byte, error) {

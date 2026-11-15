@@ -19,6 +19,11 @@ Generated from the Developer API document release `waggish-wombat`.
 - `tmh login`, `logout` and `whoami`, with `sandbox` and `live` profiles,
   client secrets in the OS keyring (or a 0600 config file without one), and
   `TMH_CLIENT_ID` / `TMH_CLIENT_SECRET` for CI.
+- `tmh login --partner-app`: the PKCE consent flow with a loopback redirect,
+  the Grant's Refresh token in the OS keyring, rotated tokens stored before
+  use, exchanges never retried and serialized across processes by a lock
+  file. The API accepts only https redirect URIs today, so it waits on
+  loopback support there.
 - Access tokens fetched and cached for the life of a command, and the
   Organization bound through introspection.
 - Pretty, colored JSON on a terminal and compact JSON when piped; `--all` and

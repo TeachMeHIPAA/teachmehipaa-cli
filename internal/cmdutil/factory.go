@@ -5,6 +5,7 @@ package cmdutil
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -200,7 +201,12 @@ func (f *Factory) NewAPIClient(profile config.Profile, credentials config.Creden
 	if f.verbose || f.showHeaders {
 		trace = func(exchange api.Exchange) { writeExchange(f.Stderr, exchange, f.showHeaders) }
 	}
+	var grant api.GrantStore
+	if credentials.PartnerApp {
+		grant = grantStore{store: f.Store(), profile: profile.Name}
+	}
 	return api.New(api.Config{
+		Grant:          grant,
 		BaseURL:        profile.BaseURL,
 		ClientID:       credentials.ClientID,
 		ClientSecret:   credentials.ClientSecret,
@@ -212,6 +218,20 @@ func (f *Factory) NewAPIClient(profile config.Profile, credentials config.Creden
 		MaxRetries:     f.maxRetries,
 		Trace:          trace,
 	})
+}
+
+// grantStore is a profile's Grant in the config store.
+type grantStore struct {
+	store   config.Store
+	profile string
+}
+
+func (g grantStore) Lock(ctx context.Context) (func(), error) {
+	return g.store.LockGrant(ctx, g.profile)
+}
+func (g grantStore) RefreshToken() (string, error) { return g.store.RefreshToken(g.profile) }
+func (g grantStore) SaveRefreshToken(token string) error {
+	return g.store.SaveRefreshToken(g.profile, token)
 }
 
 // UserAgent is the only thing tmh says about itself (ADR-0007).
