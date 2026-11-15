@@ -156,10 +156,7 @@ func (f *Factory) Credentials(profile config.Profile) (config.Credentials, error
 
 // APIClient builds a client for the selected profile's credentials.
 func (f *Factory) APIClient() (*api.Client, config.Profile, error) {
-	if f.maxRetries < 0 {
-		return nil, config.Profile{}, &UsageError{Message: "--max-retries must be 0 or more"}
-	}
-	profile, err := f.Profile()
+	profile, err := f.requestProfile()
 	if err != nil {
 		return nil, profile, err
 	}
@@ -168,6 +165,24 @@ func (f *Factory) APIClient() (*api.Client, config.Profile, error) {
 		return nil, profile, err
 	}
 	return f.NewAPIClient(profile, credentials), profile, nil
+}
+
+// PublicAPIClient builds a client for operations that take no Access token,
+// so it never reads stored credentials and works before `tmh login`.
+func (f *Factory) PublicAPIClient() (*api.Client, error) {
+	profile, err := f.requestProfile()
+	if err != nil {
+		return nil, err
+	}
+	return f.NewAPIClient(profile, config.Credentials{}), nil
+}
+
+// requestProfile is the selected profile, once the request flags are valid.
+func (f *Factory) requestProfile() (config.Profile, error) {
+	if f.maxRetries < 0 {
+		return config.Profile{}, &UsageError{Message: "--max-retries must be 0 or more"}
+	}
+	return f.Profile()
 }
 
 func (f *Factory) NewAPIClient(profile config.Profile, credentials config.Credentials) *api.Client {

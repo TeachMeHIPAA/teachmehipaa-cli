@@ -76,6 +76,9 @@ type Request struct {
 	ContentType string
 	// IfMatch is sent as the If-Match header when set.
 	IfMatch string
+	// Public is the IR's `security: none`: no Access token is minted or
+	// sent, so the operation works without credentials.
+	Public bool
 }
 
 // retrySafe never counts a key on PATCH or DELETE: those may have taken
@@ -137,11 +140,14 @@ func (c *Client) Do(ctx context.Context, request Request) (*Response, error) {
 	if len(request.Query) > 0 {
 		target += "?" + request.Query.Encode()
 	}
-	replayed := false
+	replayed := request.Public
 	for retry := 1; ; retry++ {
-		token, err := c.accessToken(ctx)
-		if err != nil {
-			return nil, err
+		var token string
+		if !request.Public {
+			var err error
+			if token, err = c.accessToken(ctx); err != nil {
+				return nil, err
+			}
 		}
 		response, err := c.exchange(ctx, request, target, token)
 		if !replayed && isUnauthorized(err) {
@@ -176,7 +182,9 @@ func (c *Client) exchange(ctx context.Context, request Request, target, token st
 	if request.IfMatch != "" {
 		httpRequest.Header.Set("If-Match", request.IfMatch)
 	}
-	httpRequest.Header.Set("Authorization", "Bearer "+token)
+	if token != "" {
+		httpRequest.Header.Set("Authorization", "Bearer "+token)
+	}
 	httpRequest.Header.Set("Accept", "application/json")
 	httpRequest.Header.Set("User-Agent", c.config.UserAgent)
 	if request.IdempotencyKey != "" {

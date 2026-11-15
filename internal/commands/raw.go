@@ -101,7 +101,7 @@ func runRaw(cmd *cobra.Command, f *cmdutil.Factory, method, rawPath string, opti
 		}
 		query.Add(key, value)
 	}
-	body, err := rawBody(f, options.data, options.contentType)
+	body, err := f.Body(options.data, options.contentType)
 	if err != nil {
 		return err
 	}
