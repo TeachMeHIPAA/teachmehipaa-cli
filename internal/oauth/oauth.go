@@ -25,6 +25,7 @@ type PKCE struct {
 	Challenge string
 }
 
+// NewPKCE returns a fresh random verifier and its challenge.
 func NewPKCE() (PKCE, error) {
 	verifier, err := randomToken()
 	if err != nil {
@@ -88,6 +89,7 @@ type ConsentError struct {
 	Description string
 }
 
+// Error is the OAuth error code and its description.
 func (e *ConsentError) Error() string {
 	message := "consent was not granted: " + e.Code
 	if e.Description != "" {
@@ -172,6 +174,8 @@ func (l *Loopback) Wait(ctx context.Context) (string, error) {
 	}
 }
 
+// Close stops listening, waiting at most a second for the browser's
+// request to finish.
 func (l *Loopback) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()

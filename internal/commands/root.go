@@ -1,4 +1,4 @@
-// Package commands is tmh's command tree: the root, the hand-written account
+// Package commands is tmh's command tree: the root, the hand-written credential
 // commands, and the generated resource commands from package generated.
 package commands
 
@@ -50,7 +50,7 @@ See "tmh completion <shell> --help" to install it permanently.`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
-			notice.start(cmd)
+			notice.start(cmd.Context(), cmd)
 		},
 	}
 	// Cobra renders this as a template; quoting braces keeps the build info
@@ -119,7 +119,14 @@ func exitCode(err error) int {
 		return exitAuth
 	case errors.As(err, &notFound):
 		return exitNotFound
-	case errors.As(err, &connectionErr), errors.As(err, &operationFailed), errors.As(err, &operationTimeout):
+	case errors.As(err, &operationFailed):
+		// A failed Operation's problem says what went wrong as an HTTP error
+		// would; without a status there is nothing to tell it from a crash.
+		if operationFailed.Problem.Status == 0 {
+			return exitServer
+		}
+		return exitCodeForStatus(operationFailed.Problem)
+	case errors.As(err, &connectionErr), errors.As(err, &operationTimeout):
 		return exitServer
 	case errors.As(err, &apiErr):
 		return exitCodeForStatus(apiErr)

@@ -2,9 +2,7 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -46,10 +44,12 @@ type GrantExchangeError struct {
 	Guidance string
 }
 
+// Error is the failure followed by what to do about it.
 func (e *GrantExchangeError) Error() string {
 	return strings.TrimSuffix(e.Err.Error(), ".") + ". " + e.Guidance
 }
 
+// Unwrap returns the failed exchange's error.
 func (e *GrantExchangeError) Unwrap() error { return e.Err }
 
 const (
@@ -124,14 +124,8 @@ func (c *Client) exchangeGrant(ctx context.Context, form url.Values, connectionG
 	if err != nil {
 		return grantTokens{}, &GrantExchangeError{Err: err, Guidance: connectionGuidance}
 	}
-	var token struct {
-		AccessToken  string   `json:"access_token"`
-		RefreshToken string   `json:"refresh_token"`
-		ExpiresIn    *float64 `json:"expires_in"`
-	}
-	if status != http.StatusOK || !isJSON(header) || json.Unmarshal(body, &token) != nil ||
-		token.AccessToken == "" || token.ExpiresIn == nil {
-		failure := oauthError(status, header, body)
+	token, failure := parseTokenResponse(status, header, body)
+	if failure != nil {
 		if failure.OAuth && failure.Code == "invalid_grant" {
 			return grantTokens{}, &GrantExchangeError{Err: failure, Guidance: invalidGrantGuidance}
 		}

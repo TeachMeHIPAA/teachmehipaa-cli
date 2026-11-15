@@ -13,9 +13,12 @@ type Profile struct {
 	AuthorizeURL string
 }
 
+// The two profiles, one per Environment.
 var (
+	// Sandbox is for testing; it is the default.
 	Sandbox = Profile{Name: "sandbox", Environment: "Sandbox", BaseURL: "https://api-teachmehipaa-dev.web.app/v1"}
-	Live    = Profile{
+	// Live is production.
+	Live = Profile{
 		Name: "live", Environment: "Live", BaseURL: "https://api.tme.so/v1",
 		AuthorizeURL: "https://console.teachmehipaa.com/oauth/authorize",
 	}
@@ -24,6 +27,7 @@ var (
 // Default is Sandbox, so nobody reaches Live by accident.
 var Default = Sandbox
 
+// LookupProfile finds a profile by its --profile name.
 func LookupProfile(name string) (Profile, bool) {
 	switch name {
 	case Sandbox.Name:

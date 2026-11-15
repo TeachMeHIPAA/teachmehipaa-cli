@@ -242,7 +242,8 @@ compact when piped, so `tmh … | jq` just works. Errors, notices and
 `--verbose` lines go to stderr, so they never corrupt piped output.
 
 List commands print one page. `--limit` sets the page size and `--cursor`
-takes the `nextCursor` of the previous page:
+takes the `nextCursor` of the previous page (on `tmh events list`, `--cursor`
+is another name for the event log's `--after`):
 
 ```sh
 tmh learners list --limit 100 --cursor eyJvZmZzZXQiOjEwMH0
@@ -262,8 +263,10 @@ tmh audit-events list --all --ndjson > audit.ndjson
 Bulk commands such as `tmh learners export`, `tmh enrollments import` and the
 batch methods start an Operation and return it at once. `--wait` polls it
 until it is done, up to `--wait-timeout` (5 minutes by default), and prints
-the finished Operation. If the Operation failed, `tmh` prints its problem and
-exits 7.
+the finished Operation. If the Operation failed, `tmh` prints it and its
+problem, and exits with the code the problem's HTTP `status` maps to, as for
+any API error (a `422` exits 5, a `5xx` 7), or 7 when the problem has no
+status.
 
 ```sh
 tmh learners export --format csv --wait
@@ -406,18 +409,28 @@ commands, `--query key=value` adds a query parameter, and `--content-type`
 overrides the body's type. PATCH bodies default to
 `application/merge-patch+json`.
 
+A path the API serves publicly (`/courses`, `/courses/<courseId>` and
+`/certificate-verifications/<tinyId>`) is sent without an Access token, so it
+works before `tmh login`. `--no-auth` sends any other request without one
+too.
+
+A raw GET is retried like any read. A raw POST is retried with the
+Idempotency-Key `tmh` generates for it, and a raw PUT only when you pass
+`--idempotency-key`. A raw PATCH or DELETE is never retried, key or not,
+since it may already have taken effect.
+
 ## Exit codes
 
 | Exit code | Meaning |
 |---|---|
 | `0` | Success. |
-| `1` | Usage error: a bad flag, argument or input file, or any other failure. |
+| `1` | Usage error or local failure: a bad flag, argument or input file, or anything that went wrong on this machine rather than at the API, such as an unreadable config file. |
 | `2` | Auth failed: not logged in, `401`, `403`, or the token endpoint refused the credentials. |
 | `3` | Not found: `404`, or something `tmh` looked for isn't there, such as an Event for `events resend`. |
 | `4` | Conflict or precondition failed: `409`, `412` or `428`. |
 | `5` | Invalid request: any other `4xx`, such as `400` or `422`. |
 | `6` | Rate limited: `429`, after retries. |
-| `7` | Server or connection error: `5xx`, no response, a response that isn't the API's, or a failed or timed-out Operation under `--wait`. |
+| `7` | Server or connection error: `5xx`, no response, a response that isn't the API's, or under `--wait` a timed-out Operation or a failed one whose problem has no status. |
 | `130` | Interrupted with Ctrl-C. |
 
 An API error prints its title and detail, each field error, and the request
@@ -466,14 +479,18 @@ locks while it exchanges the Grant's Refresh token.
 connects only to:
 
 1. the TeachMeHIPAA API, for the commands you run;
-2. your `--forward-to` URL, which gets nothing but the forwarded Event;
-3. the GitHub releases API, for the version check.
+2. the version check's GitHub releases API, unless you turn it off;
+3. what you ask for yourself: your `--forward-to` URL, which gets nothing
+   but the forwarded Event, and, during `tmh login --partner-app`, the
+   consent page in your browser, which comes back to a server `tmh` runs on
+   `127.0.0.1` only for that login.
 
 The version check asks
 `https://api.github.com/repos/TeachMeHIPAA/teachmehipaa-cli/releases/latest`
 for the latest release at most once a day, while your command runs, and
-prints one line on stderr if a newer version exists. It sends nothing but a
-`User-Agent` of `teachmehipaa-cli/<version> go/<version> <os>/<arch>`, waits
+prints one line on stderr if a newer version exists. It never goes through
+the connection `tmh` uses for the API, and sends nothing but a `User-Agent`
+of `teachmehipaa-cli/<version> go/<version> <os>/<arch>`, waits
 at most one second, and can never fail your command. It is skipped when
 stderr isn't a terminal, when `CI` is set, for completion scripts, and for
 builds without a release version. Set `TMH_NO_UPDATE_CHECK=1` to turn it off.

@@ -30,40 +30,40 @@ const (
 var releaseVersion = regexp.MustCompile(`^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$`)
 
 // updateNotice asks GitHub for tmh's latest release while the command runs,
-// at most once a day, and prints one line on stderr when it is newer. It is
-// the only request tmh sends anywhere but the API (ADR-0007), and nothing
-// it does can fail the command.
+// at most once a day, and prints one line on stderr when it is newer. Its
+// request goes through Deps.UpdateCheckTransport, never the API's, carries
+// nothing but the User-Agent (ADR-0007), and nothing it does can fail the
+// command.
 type updateNotice struct {
-	deps   cmdutil.Deps
+	deps cmdutil.Deps
+	// latest receives the release tag, or "" on any failure, within
+	// updateCheckTimeout of start.
 	latest chan string
-	ctx    context.Context
-	cancel context.CancelFunc
 }
 
-func (n *updateNotice) start(cmd *cobra.Command) {
+func (n *updateNotice) start(ctx context.Context, cmd *cobra.Command) {
 	if !n.due(cmd) {
 		return
 	}
-	n.ctx, n.cancel = context.WithTimeout(cmd.Context(), updateCheckTimeout)
+	ctx, cancel := context.WithTimeout(ctx, updateCheckTimeout)
 	n.latest = make(chan string, 1)
-	go func() { n.latest <- fetchLatestRelease(n.ctx, n.deps.Transport) }()
+	go func() {
+		defer cancel()
+		n.latest <- fetchLatestRelease(ctx, n.deps.UpdateCheckTransport)
+	}()
 }
 
-// finish waits for the check no longer than its timeout, counted from when
-// it started alongside the command.
+// finish prints the notice once the check is over. The request ends with its
+// context, so this waits no longer than the timeout counted from start.
 func (n *updateNotice) finish() {
 	if n.latest == nil {
 		return
 	}
-	defer n.cancel()
-	select {
-	case latest := <-n.latest:
-		current := n.deps.Build.Version
-		if newerRelease(latest, current) {
-			fmt.Fprintf(n.deps.Stderr, "A new version of tmh is available: v%s (you have v%s). %sv%[1]s\n",
-				strings.TrimPrefix(latest, "v"), strings.TrimPrefix(current, "v"), releaseTagURL)
-		}
-	case <-n.ctx.Done():
+	latest := <-n.latest
+	current := n.deps.Build.Version
+	if newerRelease(latest, current) {
+		fmt.Fprintf(n.deps.Stderr, "A new version of tmh is available: v%s (you have v%s). %sv%[1]s\n",
+			strings.TrimPrefix(latest, "v"), strings.TrimPrefix(current, "v"), releaseTagURL)
 	}
 }
 
@@ -109,7 +109,7 @@ func fetchLatestRelease(ctx context.Context, transport http.RoundTripper) string
 	}
 	request.Header.Set("Accept", "application/vnd.github+json")
 	request.Header.Set("User-Agent", cmdutil.UserAgent())
-	response, err := (&http.Client{Transport: transport, Timeout: updateCheckTimeout}).Do(request)
+	response, err := (&http.Client{Transport: transport}).Do(request)
 	if err != nil {
 		return ""
 	}

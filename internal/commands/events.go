@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -10,11 +9,13 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/api"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/cmdutil"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/config"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/events"
+	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/resource"
 )
 
 const (
@@ -30,9 +31,16 @@ func addEventCommands(root *cobra.Command, f *cmdutil.Factory) {
 		switch group.Name() {
 		case "events":
 			group.AddCommand(newEventsTailCommand(f), newEventsResendCommand(f))
+			for _, command := range group.Commands() {
+				if command.Annotations["method"] == "events.list" {
+					aliasCursorToAfter(command)
+				}
+			}
 		case "webhook-subscriptions":
 			// `tmh webhooks trigger-test` is the Stripe-style spelling of
-			// `tmh webhook-subscriptions test`.
+			// `tmh webhook-subscriptions test`. "webhooks" is a glossary
+			// _Avoid_ term, kept here only as a deliberate alias for Stripe
+			// CLI parity.
 			group.Aliases = append(group.Aliases, "webhooks")
 			for _, command := range group.Commands() {
 				if command.Annotations["method"] == "webhookSubscriptions.test" {
@@ -40,6 +48,22 @@ func addEventCommands(root *cobra.Command, f *cmdutil.Factory) {
 				}
 			}
 		}
+	}
+}
+
+// aliasCursorToAfter lets `tmh events list` page with --cursor like every
+// other list (CLI spec story 14), though the event log's parameter is
+// `after`.
+func aliasCursorToAfter(command *cobra.Command) {
+	flags := command.Flags()
+	flags.SetNormalizeFunc(func(_ *pflag.FlagSet, name string) pflag.NormalizedName {
+		if name == "cursor" {
+			name = "after"
+		}
+		return pflag.NormalizedName(name)
+	})
+	if after := flags.Lookup("after"); after != nil {
+		after.Usage += " (also --cursor)"
 	}
 }
 
@@ -143,7 +167,6 @@ func runTail(ctx context.Context, f *cmdutil.Factory, opts *tailOptions) error {
 		log:       eventLog{client: client, types: opts.types},
 		f:         f,
 		forwarder: forwarder,
-		types:     opts.types,
 		state:     config.StateStore{Dir: f.ConfigDir},
 		profile:   profile.Name,
 		org:       organizationID,
@@ -154,45 +177,58 @@ func runTail(ctx context.Context, f *cmdutil.Factory, opts *tailOptions) error {
 // eventLog lists the Organization's Events, oldest first.
 type eventLog struct {
 	client *api.Client
-	types  []string
+	// types filters the log; the API filters by one Event type, and handle
+	// filters several.
+	types []string
 }
 
-type eventsPage struct {
-	Items      []json.RawMessage `json:"items"`
-	NextCursor *string           `json:"nextCursor"`
-}
-
-func (l eventLog) page(ctx context.Context, after string) (eventsPage, error) {
+func (l eventLog) page(ctx context.Context, after string) (resource.Page, error) {
 	query := url.Values{"limit": {eventsPageLimit}}
 	if after != "" {
 		query.Set("after", after)
 	}
-	// The API filters by one Event type; several are filtered here.
 	if len(l.types) == 1 {
 		query.Set("type", l.types[0])
 	}
-	response, err := l.client.Do(ctx, api.Request{
+	return resource.FetchPage(ctx, l.client, api.Request{
 		Method:             http.MethodGet,
 		Path:               "/events",
 		OrganizationScoped: true,
 		Query:              query,
 		RetrySafe:          true,
 	})
-	if err != nil {
-		return eventsPage{}, err
+}
+
+// walk calls visit on each Event after `after`, oldest first, following
+// pages to the log's current end, and stops early when visit returns false.
+// The log pages by Event id, so each page asks for what follows the last
+// Event of the one before.
+func (l eventLog) walk(ctx context.Context, after string, visit func(events.Event) bool) error {
+	for {
+		page, err := l.page(ctx, after)
+		if err != nil {
+			return err
+		}
+		for _, raw := range page.Items {
+			event, err := events.Parse(raw)
+			if err != nil {
+				return err
+			}
+			if !visit(event) {
+				return nil
+			}
+			after = event.ID
+		}
+		if page.NextCursor == nil || len(page.Items) == 0 {
+			return nil
+		}
 	}
-	var page eventsPage
-	if err := json.Unmarshal(response.Body, &page); err != nil {
-		return eventsPage{}, fmt.Errorf("reading the events page: %w", err)
-	}
-	return page, nil
 }
 
 type tail struct {
 	log       eventLog
 	f         *cmdutil.Factory
 	forwarder *events.Forwarder
-	types     []string
 	state     config.StateStore
 	profile   string
 	org       string
@@ -217,36 +253,31 @@ func (t *tail) run(ctx context.Context, opts *tailOptions, secret string) error 
 		if ctx.Err() != nil {
 			return t.save()
 		}
-		page, err := t.log.page(ctx, t.cursor)
-		if err != nil {
-			if ctx.Err() != nil {
-				return t.save()
-			}
-			return firstError(err, t.save())
-		}
-		for _, raw := range page.Items {
-			event, err := events.Parse(raw)
-			if err != nil {
-				return firstError(err, t.save())
-			}
-			if !t.handle(ctx, event) {
-				return t.save()
+		arrived, interrupted := 0, false
+		err := t.log.walk(ctx, t.cursor, func(event events.Event) bool {
+			if interrupted = !t.handle(ctx, event); interrupted {
+				return false
 			}
 			t.cursor = event.ID
+			arrived++
+			return true
+		})
+		switch {
+		case interrupted || (err != nil && ctx.Err() != nil):
+			return t.save()
+		case err != nil:
+			return firstError(err, t.save())
 		}
 		if err := t.save(); err != nil {
 			return err
 		}
-		if len(page.Items) > 0 {
+		if arrived > 0 {
 			wait = opts.interval
-			if page.NextCursor != nil {
-				continue
-			}
 		}
 		if t.f.Clock.Sleep(ctx, wait) != nil {
 			return t.save()
 		}
-		if len(page.Items) == 0 {
+		if arrived == 0 {
 			wait = min(wait*2, max(maxIdleInterval, opts.interval))
 		}
 	}
@@ -270,29 +301,20 @@ func (t *tail) start(ctx context.Context, opts *tailOptions) error {
 		t.saved = t.cursor
 		return nil
 	}
-	for {
-		page, err := t.log.page(ctx, t.cursor)
-		if err != nil {
-			return err
-		}
-		if len(page.Items) > 0 {
-			event, err := events.Parse(page.Items[len(page.Items)-1])
-			if err != nil {
-				return err
-			}
-			t.cursor = event.ID
-		}
-		if page.NextCursor == nil || len(page.Items) == 0 {
-			return t.save()
-		}
+	if err := t.log.walk(ctx, "", func(event events.Event) bool {
+		t.cursor = event.ID
+		return true
+	}); err != nil {
+		return err
 	}
+	return t.save()
 }
 
 // handle prints and forwards one Event. It reports false when Ctrl-C cut the
 // forward short, so the Event isn't counted as seen and the next tail
 // delivers it again.
 func (t *tail) handle(ctx context.Context, event events.Event) bool {
-	if len(t.types) > 1 && !slices.Contains(t.types, event.Type) {
+	if types := t.log.types; len(types) > 1 && !slices.Contains(types, event.Type) {
 		return true
 	}
 	line := fmt.Sprintf("%s  %s  %s", event.OccurredAt, event.Type, event.ID)
@@ -369,26 +391,20 @@ func runResend(ctx context.Context, f *cmdutil.Factory, eventID, forwardTo strin
 // findEvent pages the log from its start: there is no endpoint for one
 // Event.
 func findEvent(ctx context.Context, log eventLog, eventID string) (events.Event, error) {
-	after := ""
-	for {
-		page, err := log.page(ctx, after)
-		if err != nil {
-			return events.Event{}, err
+	var found *events.Event
+	err := log.walk(ctx, "", func(event events.Event) bool {
+		if event.ID == eventID {
+			found = &event
 		}
-		for _, raw := range page.Items {
-			event, err := events.Parse(raw)
-			if err != nil {
-				return events.Event{}, err
-			}
-			if event.ID == eventID {
-				return event, nil
-			}
-			after = event.ID
-		}
-		if page.NextCursor == nil || len(page.Items) == 0 {
-			return events.Event{}, &cmdutil.NotFoundError{
-				Message: fmt.Sprintf("no Event %s in the event log, which keeps the last 30 days", eventID),
-			}
+		return found == nil
+	})
+	switch {
+	case err != nil:
+		return events.Event{}, err
+	case found == nil:
+		return events.Event{}, &cmdutil.NotFoundError{
+			Message: fmt.Sprintf("no Event %s in the event log, which keeps the last 30 days", eventID),
 		}
 	}
+	return *found, nil
 }

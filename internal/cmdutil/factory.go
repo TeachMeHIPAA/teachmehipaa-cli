@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -26,17 +27,21 @@ import (
 // Deps is everything tmh touches outside its own process memory. main wires
 // the real ones; tests pass fakes.
 type Deps struct {
+	// Transport carries requests to the TeachMeHIPAA API and nothing else.
 	Transport http.RoundTripper
 	// ForwardTransport carries `--forward-to` requests to the developer's
 	// own server. It is separate so those never pass through anything
 	// meant for the API.
 	ForwardTransport http.RoundTripper
-	Keyring          keyring.Keyring
-	Clock            clock.Clock
-	Stdin            io.Reader
-	Stdout           io.Writer
-	Stderr           io.Writer
-	LookupEnv        func(name string) (string, bool)
+	// UpdateCheckTransport carries the once-a-day version check to
+	// api.github.com, kept apart from the API's for the same reason.
+	UpdateCheckTransport http.RoundTripper
+	Keyring              keyring.Keyring
+	Clock                clock.Clock
+	Stdin                io.Reader
+	Stdout               io.Writer
+	Stderr               io.Writer
+	LookupEnv            func(name string) (string, bool)
 	// StdinIsTTY means a person can answer prompts.
 	StdinIsTTY bool
 	// StdoutIsTTY selects pretty, colored output over compact JSON.
@@ -67,6 +72,8 @@ type Factory struct {
 	stdin          *bufio.Reader
 }
 
+// NewFactory returns the Factory for one invocation; its flags are bound
+// by BindProfileFlags and BindRequestFlags.
 func NewFactory(deps Deps) *Factory {
 	return &Factory{Deps: deps, stdin: bufio.NewReader(deps.Stdin)}
 }
@@ -98,14 +105,17 @@ func (f *Factory) IdempotencyKey(required bool) string {
 // UsageError is a mistake in how tmh was invoked.
 type UsageError struct{ Message string }
 
+// Error is the message, which says how to invoke tmh correctly.
 func (e *UsageError) Error() string { return e.Message }
 
 // NotFoundError is something tmh looked for and the API doesn't have, found
 // without a 404 from it.
 type NotFoundError struct{ Message string }
 
+// Error says what was not found.
 func (e *NotFoundError) Error() string { return e.Message }
 
+// Profile is the one --profile or --live selected, Sandbox by default.
 func (f *Factory) Profile() (config.Profile, error) {
 	if f.profileName == "" {
 		if f.live {
@@ -123,6 +133,7 @@ func (f *Factory) Profile() (config.Profile, error) {
 	return profile, nil
 }
 
+// Store is where credentials and Grants are kept on this machine.
 func (f *Factory) Store() config.Store {
 	return config.Store{Keyring: f.Keyring, Dir: f.ConfigDir}
 }
@@ -133,6 +144,7 @@ type NotLoggedInError struct {
 	Reason  error
 }
 
+// Error is the reason followed by how to log in.
 func (e *NotLoggedInError) Error() string {
 	reason := fmt.Sprintf("not logged in to the %s profile", e.Profile.Name)
 	if e.Reason != config.ErrNotLoggedIn {
@@ -145,6 +157,7 @@ func (e *NotLoggedInError) Error() string {
 	return fmt.Sprintf("%s; run `%s` or set TMH_CLIENT_ID and TMH_CLIENT_SECRET", reason, login)
 }
 
+// Unwrap returns the reason, often config.ErrNotLoggedIn.
 func (e *NotLoggedInError) Unwrap() error { return e.Reason }
 
 // Credentials come from TMH_CLIENT_ID and TMH_CLIENT_SECRET when set, so CI
@@ -188,6 +201,16 @@ func (f *Factory) PublicAPIClient() (*api.Client, error) {
 	return f.NewAPIClient(profile, config.Credentials{}), nil
 }
 
+// RequestClient is PublicAPIClient for an operation that takes no Access
+// token, and APIClient otherwise.
+func (f *Factory) RequestClient(public bool) (*api.Client, error) {
+	if public {
+		return f.PublicAPIClient()
+	}
+	client, _, err := f.APIClient()
+	return client, err
+}
+
 // requestProfile is the selected profile, once the request flags are valid.
 func (f *Factory) requestProfile() (config.Profile, error) {
 	if f.maxRetries < 0 {
@@ -196,6 +219,8 @@ func (f *Factory) requestProfile() (config.Profile, error) {
 	return f.Profile()
 }
 
+// NewAPIClient builds a client for the given credentials with the request
+// flags applied, refreshing through the profile's Grant for a Partner app.
 func (f *Factory) NewAPIClient(profile config.Profile, credentials config.Credentials) *api.Client {
 	var trace func(api.Exchange)
 	if f.verbose || f.showHeaders {
@@ -269,7 +294,7 @@ func (f *Factory) ReadLine() (string, error) {
 	if err != nil && !(errors.Is(err, io.EOF) && line != "") {
 		return "", err
 	}
-	return trimLineEnding(line), nil
+	return strings.TrimRight(line, "\r\n"), nil
 }
 
 // ReadAll reads the rest of stdin.
@@ -284,11 +309,4 @@ func (f *Factory) ReadHiddenSecret() (string, error) {
 		return f.ReadSecret()
 	}
 	return f.ReadLine()
-}
-
-func trimLineEnding(line string) string {
-	for len(line) > 0 && (line[len(line)-1] == '\n' || line[len(line)-1] == '\r') {
-		line = line[:len(line)-1]
-	}
-	return line
 }

@@ -30,6 +30,7 @@ type Operation struct {
 	Body []byte `json:"-"`
 }
 
+// ParseOperation reads an Operation from a response body.
 func ParseOperation(body []byte) (*Operation, error) {
 	var operation Operation
 	if err := json.Unmarshal(body, &operation); err != nil || operation.Name == "" {
@@ -51,10 +52,12 @@ type OperationFailedError struct {
 	Problem *Error
 }
 
+// Error names the Operation and its problem.
 func (e *OperationFailedError) Error() string {
 	return fmt.Sprintf("operation %s failed: %s", e.Operation.Name, e.Problem.Error())
 }
 
+// Unwrap returns the problem, so it is handled like an API error.
 func (e *OperationFailedError) Unwrap() error { return e.Problem }
 
 // OperationTimeoutError means the Operation was still running when the wait
@@ -64,6 +67,7 @@ type OperationTimeoutError struct {
 	Timeout   time.Duration
 }
 
+// Error names the Operation and how long tmh waited.
 func (e *OperationTimeoutError) Error() string {
 	return fmt.Sprintf("operation %s is still running after %s", e.Operation.Name, e.Timeout)
 }
@@ -91,7 +95,7 @@ func (c *Client) WaitOperation(ctx context.Context, operation *Operation, timeou
 		if err := c.config.Clock.Sleep(ctx, min(operationPollDelay(poll), remaining)); err != nil {
 			return operation, err
 		}
-		response, err := c.Do(ctx, Request{Method: http.MethodGet, Path: path})
+		response, err := c.Do(ctx, Request{Method: http.MethodGet, Path: path, RetrySafe: true})
 		if err != nil {
 			return operation, err
 		}

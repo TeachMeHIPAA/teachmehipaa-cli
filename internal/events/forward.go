@@ -102,8 +102,7 @@ func (f *Forwarder) Forward(ctx context.Context, event Event) Result {
 		return Result{Err: err}
 	}
 	startedAt := f.clock.Now()
-	request.Header = Sign(f.secret, pathAndQuery(f.target), startedAt, event.Body,
-		Meta{EventID: event.ID, EventType: event.Type})
+	request.Header = Sign(f.secret, pathAndQuery(f.target), startedAt, event)
 	response, err := f.client.Do(request)
 	latency := f.clock.Now().Sub(startedAt)
 	if err != nil {

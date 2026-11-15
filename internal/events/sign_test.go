@@ -44,9 +44,10 @@ func TestTheLocalSignatureMatchesThePlatformsVector(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	headers := events.Sign(v.Secret, v.Path, at, []byte(v.Event.Body), events.Meta{
-		EventID:   v.Event.EventID,
-		EventType: v.Event.EventType,
+	headers := events.Sign(v.Secret, v.Path, at, events.Event{
+		ID:   v.Event.EventID,
+		Type: v.Event.EventType,
+		Body: []byte(v.Event.Body),
 	})
 
 	for name, want := range v.Event.Headers {

@@ -9,6 +9,15 @@ import (
 	"strings"
 )
 
+// DataFlagUsage is the help for -d/--data, which every command that sends a
+// body reads with Body.
+const DataFlagUsage = "body field as key=value (dotted keys nest, key[]=v appends, key:=<json> sends JSON), " +
+	"or the whole body as @file, @- for stdin, or a JSON document; repeatable"
+
+// IfMatchFlagUsage is the help for --if-match on every command that can
+// write conditionally.
+const IfMatchFlagUsage = "send If-Match with this ETag, for a conditional write"
+
 // BodyField is one value placed in a JSON body. Path runs through nested
 // objects to the field; Value is a string, number, bool, slice, or a
 // json.RawMessage for `key:=<json>`.

@@ -20,6 +20,8 @@ import (
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/clock"
 )
 
+// Config is what a Client needs: where the API is, whose credentials to
+// use, and how to send, trace and retry requests.
 type Config struct {
 	// BaseURL ends in /v1, without a trailing slash.
 	BaseURL      string
@@ -52,6 +54,8 @@ type Client struct {
 	organizationID string
 }
 
+// New returns a Client that has not yet sent anything; it mints an Access
+// token on its first request.
 func New(config Config) *Client {
 	return &Client{
 		config:         config,
@@ -68,9 +72,10 @@ type Request struct {
 	// OrganizationScoped prefixes Path with /organizations/{orgId}.
 	OrganizationScoped bool
 	Query              url.Values
-	// RetrySafe is the IR's `retrySafe`: the operation may be replayed after
-	// a transient failure. GETs and POSTs or PUTs carrying an
-	// IdempotencyKey are retried without it.
+	// RetrySafe means the request may be replayed after a transient
+	// failure, and is the only thing that makes it retryable: the IR's
+	// `retrySafe` for a generated command, the caller's own judgment
+	// otherwise.
 	RetrySafe bool
 	// IdempotencyKey is sent as the Idempotency-Key header when set. It is
 	// fixed per call, so every retry carries the same key.
@@ -87,18 +92,6 @@ type Request struct {
 	// "application/pdf, application/problem+json" or "*/*". A success must
 	// then have one of its media types other than problem+json.
 	Accept string
-}
-
-// retrySafe never counts a key on PATCH or DELETE: those may have taken
-// effect when a response was lost, and the API doesn't dedupe them by key.
-func (r Request) retrySafe() bool {
-	switch r.Method {
-	case http.MethodGet:
-		return true
-	case http.MethodPost, http.MethodPut:
-		return r.RetrySafe || r.IdempotencyKey != ""
-	}
-	return false
 }
 
 // Response is a successful API response whose body is JSON, or empty for 204.
@@ -126,10 +119,12 @@ type Exchange struct {
 // ConnectionError means no HTTP response arrived.
 type ConnectionError struct{ Err error }
 
+// Error names the API as what could not be reached.
 func (e *ConnectionError) Error() string {
 	return fmt.Sprintf("could not reach the TeachMeHIPAA API: %v", e.Err)
 }
 
+// Unwrap returns the network error.
 func (e *ConnectionError) Unwrap() error { return e.Err }
 
 // Do sends request, retrying transient failures when it is retry-safe. A 401
@@ -169,7 +164,7 @@ func (c *Client) Do(ctx context.Context, request Request) (*Response, error) {
 		if err == nil {
 			return response, nil
 		}
-		if !request.retrySafe() || !c.retryAfterWait(ctx, err, retry, isTransient) {
+		if !request.RetrySafe || !c.retryAfterWait(ctx, err, retry, isTransient) {
 			return nil, err
 		}
 	}
@@ -238,8 +233,9 @@ type Introspection struct {
 	ExpiresAt *string `json:"expiresAt"`
 }
 
+// Introspect asks the API what the client's Access token is bound to.
 func (c *Client) Introspect(ctx context.Context) (*Introspection, error) {
-	response, err := c.Do(ctx, Request{Method: http.MethodGet, Path: "/auth/introspection"})
+	response, err := c.Do(ctx, Request{Method: http.MethodGet, Path: "/auth/introspection", RetrySafe: true})
 	if err != nil {
 		return nil, err
 	}
@@ -300,16 +296,31 @@ func (c *Client) mint(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	var token struct {
-		AccessToken string   `json:"access_token"`
-		ExpiresIn   *float64 `json:"expires_in"`
-	}
-	if status != http.StatusOK || !isJSON(header) ||
-		json.Unmarshal(body, &token) != nil || token.AccessToken == "" || token.ExpiresIn == nil {
-		return oauthError(status, header, body)
+	token, failure := parseTokenResponse(status, header, body)
+	if failure != nil {
+		return failure
 	}
 	c.useToken(token.AccessToken, requestedAt, *token.ExpiresIn)
 	return nil
+}
+
+// tokenResponse is what every grant type answers with; only the
+// `authorization_code` and `refresh_token` grants include RefreshToken.
+type tokenResponse struct {
+	AccessToken  string   `json:"access_token"`
+	RefreshToken string   `json:"refresh_token"`
+	ExpiresIn    *float64 `json:"expires_in"`
+}
+
+// parseTokenResponse reads a successful token response, or the OAuth error
+// that answered instead.
+func parseTokenResponse(status int, header http.Header, body []byte) (tokenResponse, *Error) {
+	var token tokenResponse
+	if status != http.StatusOK || !isJSON(header) ||
+		json.Unmarshal(body, &token) != nil || token.AccessToken == "" || token.ExpiresIn == nil {
+		return tokenResponse{}, oauthError(status, header, body)
+	}
+	return token, nil
 }
 
 // useToken caches an Access token whose expiry counts from requestedAt.

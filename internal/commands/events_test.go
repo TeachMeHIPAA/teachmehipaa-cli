@@ -486,7 +486,7 @@ func TestForwardToMustBeAnHTTPURL(t *testing.T) {
 	}
 }
 
-func TestWebhooksTriggerTestSendsATestDelivery(t *testing.T) {
+func TestTriggerTestSendsATestDeliveryToTheWebhookSubscription(t *testing.T) {
 	env := loggedInByEnvironment(t)
 	route := "POST /v1/organizations/" + testkit.OrgID + "/webhook-subscriptions/" + testkit.SubscriptionID + ":test"
 	operation := `{"name":"operations/op_1","done":true,"response":{"_tag":"sent","status":204}}`
@@ -514,5 +514,20 @@ func TestCtrlCWhileFindingTheStartExitsCleanly(t *testing.T) {
 
 	if result.ExitCode != 0 || result.Stdout != "" {
 		t.Errorf("exit code = %d, stdout = %q, stderr = %q; want a quiet exit 0", result.ExitCode, result.Stdout, result.Stderr)
+	}
+}
+
+func TestEventsListTakesCursorAsAnotherNameForAfter(t *testing.T) {
+	env := loggedInByEnvironment(t)
+	env.Transport.Script(eventsRoute, eventsPage("", expiredEvent))
+
+	result := env.Run("events", "list", "--cursor", "evt_01", "--limit", "1")
+
+	if result.ExitCode != 0 {
+		t.Fatalf("exit code = %d, stderr = %q", result.ExitCode, result.Stderr)
+	}
+	requests := env.Transport.Requests()
+	if got, want := requests[len(requests)-1].URL, eventsURL+"?after=evt_01&limit=1"; got != want {
+		t.Errorf("URL = %s, want %s", got, want)
 	}
 }

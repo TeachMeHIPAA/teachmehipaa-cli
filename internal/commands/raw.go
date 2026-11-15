@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/api"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/cmdutil"
+	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/commands/generated"
+	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/resource"
 )
 
 // orgIDToken is how the API reference writes Organization-scoped paths, so a
@@ -22,6 +25,7 @@ type rawOptions struct {
 	contentType string
 	ifMatch     string
 	output      string
+	noAuth      bool
 }
 
 func newRawCommands(f *cmdutil.Factory) []*cobra.Command {
@@ -76,18 +80,18 @@ func newRawCommand(f *cmdutil.Factory, method string) *cobra.Command {
 	}
 	flags := command.Flags()
 	flags.StringArrayVar(&options.query, "query", nil, "query parameter as key=value; repeatable")
+	flags.BoolVar(&options.noAuth, "no-auth", false,
+		"send no Access token, even when logged in; public operations such as /courses never get one")
 	if method == http.MethodGet {
 		flags.StringVarP(&options.output, "output", "o", "",
 			"save the response body unchanged to this file, or - for stdout when it is piped, whatever its content type")
 		return command
 	}
-	flags.StringVar(&options.ifMatch, "if-match", "", "send If-Match with this ETag, for a conditional write")
+	flags.StringVar(&options.ifMatch, "if-match", "", cmdutil.IfMatchFlagUsage)
 	if method == http.MethodDelete {
 		return command
 	}
-	flags.StringArrayVarP(&options.data, "data", "d", nil,
-		"body field as key=value (dotted keys nest, key[]=v appends, key:=<json> sends JSON), "+
-			"or the whole body as @file, @- for stdin, or a JSON document; repeatable")
+	flags.StringArrayVarP(&options.data, "data", "d", nil, cmdutil.DataFlagUsage)
 	flags.StringVar(&options.contentType, "content-type", defaultContentType(method), "Content-Type of the body")
 	return command
 }
@@ -115,7 +119,11 @@ func runRaw(cmd *cobra.Command, f *cmdutil.Factory, method, rawPath string, opti
 		}
 		accept = "*/*"
 	}
-	client, _, err := f.APIClient()
+	public := options.noAuth || isPublicOperation(method, path)
+	if public && strings.Contains(path, orgIDToken) {
+		return &cmdutil.UsageError{Message: fmt.Sprintf("%s needs credentials to fill in: drop --no-auth or write the Organization id", orgIDToken)}
+	}
+	client, err := f.RequestClient(public)
 	if err != nil {
 		return err
 	}
@@ -126,17 +134,20 @@ func runRaw(cmd *cobra.Command, f *cmdutil.Factory, method, rawPath string, opti
 		}
 		path = strings.ReplaceAll(path, orgIDToken, url.PathEscape(organizationID))
 	}
+	// Only POST gets a generated key: the API dedupes POSTs by key, and a
+	// raw PUT is replayed only when the caller vouches with their own.
+	idempotencyKey := f.IdempotencyKey(method == http.MethodPost)
 	response, err := client.Do(cmd.Context(), api.Request{
-		Method: method,
-		Path:   path,
-		Query:  query,
-		// Only POST gets a generated key: the API dedupes POSTs by key, and a
-		// raw PUT is replayed only when the caller vouches with their own.
-		IdempotencyKey: f.IdempotencyKey(method == http.MethodPost),
+		Method:         method,
+		Path:           path,
+		Query:          query,
+		RetrySafe:      rawRetrySafe(method, idempotencyKey),
+		IdempotencyKey: idempotencyKey,
 		Body:           body,
 		ContentType:    options.contentType,
 		IfMatch:        options.ifMatch,
 		Accept:         accept,
+		Public:         public,
 	})
 	if err != nil {
 		return err
@@ -145,6 +156,26 @@ func runRaw(cmd *cobra.Command, f *cmdutil.Factory, method, rawPath string, opti
 		return f.SaveDownload(options.output, response.Body)
 	}
 	return f.PrintJSON(response.Body)
+}
+
+// isPublicOperation reports whether the path is one the IR marks
+// `security: none`, which the API serves without an Access token.
+func isPublicOperation(method, path string) bool {
+	return slices.ContainsFunc(generated.Methods(), func(m resource.Method) bool {
+		return m.Public && m.Matches(method, path)
+	})
+}
+
+// rawRetrySafe never counts a key on PATCH or DELETE: those may have taken
+// effect when a response was lost, and the API doesn't dedupe them by key.
+func rawRetrySafe(method, idempotencyKey string) bool {
+	switch method {
+	case http.MethodGet:
+		return true
+	case http.MethodPost, http.MethodPut:
+		return idempotencyKey != ""
+	}
+	return false
 }
 
 // splitRawPath separates a query string written into the path, so it merges

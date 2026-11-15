@@ -57,9 +57,41 @@ type Method struct {
 	// Export is set on Operations whose response holds a file, which get
 	// -o/--output.
 	Export bool
-	// Preview is the command a --preview flag stands for, e.g.
-	// "enrollments preview-import".
-	Preview string
+	// PreviewMethod is the Name of the sibling method a --preview flag
+	// switches to, e.g. "enrollments.previewImport".
+	PreviewMethod string
+}
+
+// Matches reports whether a request for httpMethod to path, relative to the
+// base URL with any Organization id filled in, is this method's.
+func (m Method) Matches(httpMethod, path string) bool {
+	template := m.Path
+	if m.OrganizationScoped {
+		template = "/organizations/{orgId}" + template
+	}
+	want := strings.Split(template, "/")
+	got := strings.Split(path, "/")
+	if httpMethod != m.HTTPMethod || len(got) != len(want) {
+		return false
+	}
+	for i, segment := range want {
+		if !segmentMatches(segment, got[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// segmentMatches lets a {placeholder} stand for any non-empty value, keeping
+// the literal text around it, such as a `:verb`.
+func segmentMatches(template, segment string) bool {
+	prefix, rest, isPlaceholder := strings.Cut(template, "{")
+	if !isPlaceholder {
+		return template == segment
+	}
+	_, suffix, _ := strings.Cut(rest, "}")
+	return len(segment) > len(prefix)+len(suffix) &&
+		strings.HasPrefix(segment, prefix) && strings.HasSuffix(segment, suffix)
 }
 
 // Body is the request body a method sends.
@@ -101,19 +133,28 @@ type Fixed struct {
 // Requirement is whether a method takes a header such as If-Match.
 type Requirement int
 
+// The requirements a method can have for a header.
 const (
+	// None means the method never sends it.
 	None Requirement = iota
+	// Optional means a flag may set it.
 	Optional
+	// Required means the command refuses to run without it.
 	Required
 )
 
 // FlagType is how a flag's value is parsed and sent.
 type FlagType int
 
+// The types a flag can have.
 const (
+	// String is sent as given.
 	String FlagType = iota
+	// Int is a whole number.
 	Int
+	// Number is any JSON number.
 	Number
+	// Bool is true or false.
 	Bool
 	// StringList is repeatable and comma-separated.
 	StringList
@@ -161,15 +202,13 @@ type input struct {
 	waitTimeout time.Duration
 }
 
-// previewOf is the method a --preview flag switches to: the sibling command
-// Method.Preview names.
+// previewOf is the sibling a --preview flag switches to, or nil.
 func previewOf(method Method, siblings []Method) *Method {
-	if method.Preview == "" {
+	if method.PreviewMethod == "" {
 		return nil
 	}
-	words := strings.Fields(method.Preview)
 	for i := range siblings {
-		if strings.Fields(siblings[i].Use)[0] == words[len(words)-1] {
+		if siblings[i].Name == method.PreviewMethod {
 			return &siblings[i]
 		}
 	}
@@ -213,13 +252,11 @@ func newCommand(f *cmdutil.Factory, method Method, preview *Method) *cobra.Comma
 		}
 		if len(body.FileParts) == 0 {
 			flags.StringArrayVarP(&in.data, "data", "d", nil,
-				"body field as key=value (dotted keys nest, key[]=v appends, key:=<json> sends JSON), "+
-					"or the whole body as @file, @- for stdin, or a JSON document; repeatable. "+
-					"Flags override -d fields, which override the document")
+				cmdutil.DataFlagUsage+". Flags override -d fields, which override the document")
 		}
 	}
 	if method.IfMatch != None {
-		flags.StringVar(&in.ifMatch, "if-match", "", "send If-Match with this ETag, for a conditional write")
+		flags.StringVar(&in.ifMatch, "if-match", "", cmdutil.IfMatchFlagUsage)
 		if method.IfMatch == Required {
 			_ = command.MarkFlagRequired("if-match")
 		}
@@ -228,7 +265,7 @@ func newCommand(f *cmdutil.Factory, method Method, preview *Method) *cobra.Comma
 		flags.StringVarP(&in.output, "output", "o", "", "file to save the response to, or - for stdout when it is piped")
 	}
 	if method.ReturnsOperation {
-		flags.BoolVar(&in.wait, "wait", false, "wait until the Operation is done and print it; a failed Operation exits 7")
+		flags.BoolVar(&in.wait, "wait", false, "wait until the Operation is done and print it; a failed Operation exits as its HTTP status would")
 		flags.DurationVar(&in.waitTimeout, "wait-timeout", 5*time.Minute, "how long --wait waits before giving up")
 	}
 	if method.Export {
@@ -239,7 +276,7 @@ func newCommand(f *cmdutil.Factory, method Method, preview *Method) *cobra.Comma
 		flags.BoolVar(&in.ndjson, "ndjson", false, "with --all, print one compact JSON item per line as each page arrives")
 	}
 	if preview != nil {
-		flags.BoolVar(&in.preview, "preview", false, "check the upload without committing it, as `tmh "+method.Preview+"` does")
+		flags.BoolVar(&in.preview, "preview", false, "check the upload without committing it, as the "+strings.Fields(preview.Use)[0]+" command does")
 	}
 	return command
 }
@@ -314,7 +351,7 @@ func run(cmd *cobra.Command, f *cmdutil.Factory, method Method, in *input, args 
 			return err
 		}
 	}
-	client, err := apiClient(f, method.Public)
+	client, err := f.RequestClient(method.Public)
 	if err != nil {
 		return err
 	}
@@ -345,14 +382,6 @@ func run(cmd *cobra.Command, f *cmdutil.Factory, method Method, in *input, args 
 		return waitForOperation(cmd.Context(), f, client, response.Body, in)
 	}
 	return f.PrintJSON(response.Body)
-}
-
-func apiClient(f *cmdutil.Factory, public bool) (*api.Client, error) {
-	if public {
-		return f.PublicAPIClient()
-	}
-	client, _, err := f.APIClient()
-	return client, err
 }
 
 // expandPath escapes each id in one pass, so an id can't inject another

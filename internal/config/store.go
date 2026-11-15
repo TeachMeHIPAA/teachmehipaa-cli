@@ -53,9 +53,16 @@ type fileProfile struct {
 	RefreshToken   string `toml:"refresh_token,omitempty"`
 }
 
+// errNoGrant means another tmh process logged the profile out, or into
+// something else, since this one read it.
+func errNoGrant(profile string) error {
+	return fmt.Errorf("%w: the %s profile no longer holds a Grant", ErrNotLoggedIn, profile)
+}
+
 // refreshTokenUser is the keyring entry for a profile's Grant.
 func refreshTokenUser(profile string) string { return profile + ":refresh-token" }
 
+// Path is config.toml's location.
 func (s Store) Path() string { return filepath.Join(s.Dir, "config.toml") }
 
 // Save reports whether the secret went to the config file because the
@@ -123,7 +130,7 @@ func (s Store) RefreshToken(profile string) (string, error) {
 	}
 	entry, ok := config.Profiles[profile]
 	if !ok || !entry.PartnerApp {
-		return "", fmt.Errorf("%w: the %s profile no longer holds a Grant", ErrNotLoggedIn, profile)
+		return "", errNoGrant(profile)
 	}
 	// The file copy wins: it exists only when the keyring refused the
 	// latest token, so a keyring copy would be older.
@@ -148,7 +155,7 @@ func (s Store) SaveRefreshToken(profile, token string) error {
 	}
 	entry, ok := config.Profiles[profile]
 	if !ok || !entry.PartnerApp {
-		return fmt.Errorf("the %s profile no longer holds a Grant", profile)
+		return errNoGrant(profile)
 	}
 	if s.Keyring.Set(keyringService, refreshTokenUser(profile), token) == nil {
 		if entry.RefreshToken == "" {
@@ -162,6 +169,8 @@ func (s Store) SaveRefreshToken(profile, token string) error {
 	return s.write(config)
 }
 
+// Load returns the profile's credentials, or an error wrapping
+// ErrNotLoggedIn when it has none or its secret is gone from the keyring.
 func (s Store) Load(profile string) (Credentials, error) {
 	config, err := s.read()
 	if err != nil {
@@ -250,8 +259,10 @@ func (s Store) write(config fileConfig) error {
 	return writeTOML(s.Dir, s.Path(), config)
 }
 
-// writeTOML replaces path atomically; CreateTemp makes it 0600, so a secret
-// is never readable by others, even briefly.
+// writeTOML replaces path atomically and durably; CreateTemp makes it 0600,
+// so a secret is never readable by others, even briefly. A rotated Refresh
+// token must survive a crash once the exchange returns (ADR-0004): the
+// superseded one left behind would revoke the Grant when presented.
 func writeTOML(dir, path string, value any) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
@@ -265,8 +276,15 @@ func writeTOML(dir, path string, value any) error {
 		file.Close()
 		return err
 	}
+	if err := file.Sync(); err != nil {
+		file.Close()
+		return err
+	}
 	if err := file.Close(); err != nil {
 		return err
 	}
-	return os.Rename(file.Name(), path)
+	if err := os.Rename(file.Name(), path); err != nil {
+		return err
+	}
+	return syncDir(dir)
 }

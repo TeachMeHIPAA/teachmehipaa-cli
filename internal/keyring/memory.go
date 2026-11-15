@@ -13,6 +13,7 @@ type Memory struct {
 	broken  error
 }
 
+// NewMemory is an empty keyring that works.
 func NewMemory() *Memory { return &Memory{secrets: map[string]string{}} }
 
 // NewUnavailable fails every call, like a machine with no credential store.
@@ -20,6 +21,7 @@ func NewUnavailable() *Memory {
 	return &Memory{secrets: map[string]string{}, broken: errors.New("keyring: no credential store available")}
 }
 
+// Get returns the stored secret, or ErrNotFound.
 func (m *Memory) Get(service, user string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -33,6 +35,7 @@ func (m *Memory) Get(service, user string) (string, error) {
 	return secret, nil
 }
 
+// Set stores the secret, replacing any before it.
 func (m *Memory) Set(service, user, secret string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -43,6 +46,7 @@ func (m *Memory) Set(service, user, secret string) error {
 	return nil
 }
 
+// Delete removes the secret, or returns ErrNotFound.
 func (m *Memory) Delete(service, user string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

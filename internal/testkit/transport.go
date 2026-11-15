@@ -45,6 +45,7 @@ type Transport struct {
 	requests []Request
 }
 
+// NewTransport has no replies scripted; any request fails t.
 func NewTransport(t testing.TB) *Transport {
 	return &Transport{t: t, routes: map[string][]Reply{}}
 }
@@ -73,6 +74,7 @@ func (f *Transport) Routes() []string {
 	return routes
 }
 
+// RoundTrip records r and answers with its route's next scripted reply.
 func (f *Transport) RoundTrip(r *http.Request) (*http.Response, error) {
 	body := ""
 	if r.Body != nil {

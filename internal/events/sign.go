@@ -17,18 +17,12 @@ import (
 // secret doesn't have.
 const LocalKeyID = "local"
 
-// Meta is what the signature headers say about the Event besides its body.
-type Meta struct {
-	EventID   string
-	EventType string
-}
-
-// Sign returns the headers of a Delivery of body to pathAndQuery at the given
-// time. The key is the secret's UTF-8 bytes, never its base64 decoding, as
-// the platform's signer does.
-func Sign(secret, pathAndQuery string, at time.Time, body []byte, meta Meta) http.Header {
+// Sign returns the headers of a Delivery of the Event to pathAndQuery at the
+// given time. The key is the secret's UTF-8 bytes, never its base64
+// decoding, as the platform's signer does.
+func Sign(secret, pathAndQuery string, at time.Time, event Event) http.Header {
 	timestamp := at.UTC().Format("2006-01-02T15:04:05.000Z")
-	bodyHash := sha256.Sum256(body)
+	bodyHash := sha256.Sum256(event.Body)
 	bodyHashHex := hex.EncodeToString(bodyHash[:])
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte("POST\n" + pathAndQuery + "\n" + timestamp + "\n" + bodyHashHex))
@@ -38,8 +32,8 @@ func Sign(secret, pathAndQuery string, at time.Time, body []byte, meta Meta) htt
 	header.Set("x-tmh-timestamp", timestamp)
 	header.Set("x-tmh-body-hash", bodyHashHex)
 	header.Set("x-tmh-signature", hex.EncodeToString(mac.Sum(nil)))
-	header.Set("x-tmh-event-type", meta.EventType)
-	header.Set("x-tmh-event-id", meta.EventID)
+	header.Set("x-tmh-event-type", event.Type)
+	header.Set("x-tmh-event-id", event.ID)
 	return header
 }
 

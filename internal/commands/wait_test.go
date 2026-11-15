@@ -92,8 +92,8 @@ func TestWaitOnAFailedOperationPrintsItAndRendersTheProblem(t *testing.T) {
 
 	result := env.Run("enrollments", "export", "--format", "csv", "--wait")
 
-	if result.ExitCode != 7 {
-		t.Errorf("exit code = %d, want 7", result.ExitCode)
+	if result.ExitCode != 5 {
+		t.Errorf("exit code = %d, want 5 for its 422", result.ExitCode)
 	}
 	if result.Stdout != failedOperation+"\n" {
 		t.Errorf("stdout = %q, want the failed Operation", result.Stdout)
@@ -102,6 +102,33 @@ func TestWaitOnAFailedOperationPrintsItAndRendersTheProblem(t *testing.T) {
 		if !strings.Contains(result.Stderr, want) {
 			t.Errorf("stderr = %q, want it to contain %q", result.Stderr, want)
 		}
+	}
+}
+
+func TestAFailedOperationExitsLikeAnHTTPErrorWithItsProblemsStatus(t *testing.T) {
+	tests := []struct {
+		name     string
+		problem  string
+		wantExit int
+	}{
+		{"422 invalid roster", `{"code":"invalid_csv","title":"Invalid roster","status":422}`, 5},
+		{"409 conflict", `{"code":"seat_unavailable","title":"No Seats left","status":409}`, 4},
+		{"403 forbidden", `{"code":"insufficient_scope","title":"Forbidden","status":403}`, 2},
+		{"500 internal", `{"code":"internal","title":"Internal error","status":500}`, 7},
+		{"no status", `{"code":"internal","title":"Internal error"}`, 7},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := loggedInByEnvironment(t)
+			failed := `{"name":"` + operationName + `","done":true,"error":` + tt.problem + `}`
+			env.Transport.Script(importRoute, accepted(failed))
+
+			result := env.Run("enrollments", "import", "--file", writeRoster(t), "--wait")
+
+			if result.ExitCode != tt.wantExit {
+				t.Errorf("exit code = %d, want %d; stderr = %q", result.ExitCode, tt.wantExit, result.Stderr)
+			}
+		})
 	}
 }
 

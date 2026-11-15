@@ -245,28 +245,42 @@ func TestAWriteTheIRMarksRetrySafeIsRetriedWithoutAKey(t *testing.T) {
 
 func TestAnIdempotencyKeyNeverMakesADeleteRetryable(t *testing.T) {
 	env := loggedInByEnvironment(t)
-	env.Transport.Script(testkit.DeleteWebhookRoute, unavailable(), testkit.Reply{Status: 204})
+	env.Transport.Script(testkit.DeleteWebhookSubscriptionRoute, unavailable(), testkit.Reply{Status: 204})
 
 	result := env.Run("webhook-subscriptions", "delete", testkit.SubscriptionID, "--idempotency-key", "cleanup-1")
 
 	if result.ExitCode != 7 {
 		t.Errorf("exit code = %d, want 7", result.ExitCode)
 	}
-	if keys := idempotencyKeys(env, testkit.DeleteWebhookRoute); !slices.Equal(keys, []string{"cleanup-1"}) {
+	if keys := idempotencyKeys(env, testkit.DeleteWebhookSubscriptionRoute); !slices.Equal(keys, []string{"cleanup-1"}) {
 		t.Errorf("Idempotency-Keys = %q, want one request carrying cleanup-1", keys)
+	}
+}
+
+func TestAnIdempotencyKeyNeverMakesAWriteTheIRMarksUnsafeRetryable(t *testing.T) {
+	env := loggedInByEnvironment(t)
+	env.Transport.Script(learnerPatchRoute, unavailable(), testkit.JSON(testkit.LearnerBody))
+
+	result := env.Run("learners", "update", testkit.LearnerID, "--name", "Ana B. Example", "--if-match", `"v7"`, "--idempotency-key", "sync-1")
+
+	if result.ExitCode != 7 {
+		t.Errorf("exit code = %d, want 7", result.ExitCode)
+	}
+	if keys := idempotencyKeys(env, learnerPatchRoute); !slices.Equal(keys, []string{"sync-1"}) {
+		t.Errorf("Idempotency-Keys = %q, want one request carrying sync-1", keys)
 	}
 }
 
 func TestADeleteAnsweredWith204PrintsNothing(t *testing.T) {
 	env := loggedInByEnvironment(t)
-	env.Transport.Script(testkit.DeleteWebhookRoute, testkit.Reply{Status: 204, Header: map[string]string{"Content-Type": ""}})
+	env.Transport.Script(testkit.DeleteWebhookSubscriptionRoute, testkit.Reply{Status: 204, Header: map[string]string{"Content-Type": ""}})
 
 	result := env.Run("webhook-subscriptions", "delete", testkit.SubscriptionID)
 
 	if result.ExitCode != 0 || result.Stdout != "" {
 		t.Errorf("exit code = %d, stdout = %q, stderr = %q; want 0 and nothing printed", result.ExitCode, result.Stdout, result.Stderr)
 	}
-	if keys := idempotencyKeys(env, testkit.DeleteWebhookRoute); !slices.Equal(keys, []string{""}) {
+	if keys := idempotencyKeys(env, testkit.DeleteWebhookSubscriptionRoute); !slices.Equal(keys, []string{""}) {
 		t.Errorf("Idempotency-Keys = %q, want none", keys)
 	}
 }

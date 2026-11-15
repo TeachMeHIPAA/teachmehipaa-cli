@@ -13,13 +13,13 @@ const (
 	IntrospectionRoute = "GET /v1/auth/introspection"
 	LearnerRoute       = "GET /v1/organizations/" + OrgID + "/learners/" + LearnerID
 
-	EnrollmentID       = "enr_01JD81CD2E3F4G5H6J7K8M9N0P"
-	SubscriptionID     = "whs_01JD82EF3G4H5J6K7M8N9P0Q1R"
-	RemindRoute        = "POST /v1/organizations/" + OrgID + "/enrollments/" + EnrollmentID + ":remind"
-	LaunchLinkRoute    = "POST /v1/organizations/" + OrgID + "/learners/" + LearnerID + ":createLaunchLink"
-	DeleteWebhookRoute = "DELETE /v1/organizations/" + OrgID + "/webhook-subscriptions/" + SubscriptionID
-	RemindAcceptedBody = `{"enrollmentId":"` + EnrollmentID + `","action":"remind"}`
-	LaunchLinkBody     = `{"url":"https://training.teachmehipaa.com/launch/abc","expiresAt":"2026-11-15T12:05:00.000Z"}`
+	EnrollmentID                   = "enr_01JD81CD2E3F4G5H6J7K8M9N0P"
+	SubscriptionID                 = "whs_01JD82EF3G4H5J6K7M8N9P0Q1R"
+	RemindRoute                    = "POST /v1/organizations/" + OrgID + "/enrollments/" + EnrollmentID + ":remind"
+	LaunchLinkRoute                = "POST /v1/organizations/" + OrgID + "/learners/" + LearnerID + ":createLaunchLink"
+	DeleteWebhookSubscriptionRoute = "DELETE /v1/organizations/" + OrgID + "/webhook-subscriptions/" + SubscriptionID
+	RemindAcceptedBody             = `{"enrollmentId":"` + EnrollmentID + `","action":"remind"}`
+	LaunchLinkBody                 = `{"url":"https://training.teachmehipaa.com/launch/abc","expiresAt":"2026-11-15T12:05:00.000Z"}`
 )
 
 // TokenReply is `ClientCredentialsTokenResponse`.

@@ -56,7 +56,7 @@ func (p *partnerLogin) run(cmd *cobra.Command, f *cmdutil.Factory, profile confi
 			"the %s profile has no published consent page: pass --authorize-url", profile.Name)}
 	}
 	if p.redirectPort < 0 || p.redirectPort > 65535 {
-		return &cmdutil.UsageError{Message: "--redirect-port must be between 1 and 65535"}
+		return &cmdutil.UsageError{Message: "--redirect-port must be a port from 1 to 65535, or 0 for any free port"}
 	}
 	credentials, err := readCredentials(f, clientID, partnerAppPrompts)
 	if err != nil {

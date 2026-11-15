@@ -20,6 +20,14 @@ const orgPrefix = "/organizations/{orgId}"
 // shadow one.
 var globalFlags = []string{"help", "profile", "live", "max-retries", "idempotency-key", "verbose", "show-headers"}
 
+// GlobalFlags are the root command's persistent flags, plus --help, which a
+// generated flag must not shadow.
+func GlobalFlags() []string { return slices.Clone(globalFlags) }
+
+// RootCommands are the root command's hand-written subcommands, which a
+// generated resource group must not collide with.
+func RootCommands() []string { return slices.Clone(rootCommands) }
+
 // afterItemID is the item field an `after`-style list resumes from. The IR
 // names only the parameter; the event log is the one such list, and its
 // `after` is the last Event's id (api-sdk-surface.md §4).
@@ -34,7 +42,7 @@ const binaryAcceptSuffix = ", application/problem+json"
 var rootCommands = []string{"completion", "delete", "get", "help", "login", "logout", "open", "patch", "post", "put", "version", "whoami"}
 
 // previews are CLI-only switches (CLI spec story 19): the method that gets a
-// --preview flag, and the Q25 split it stands for.
+// --preview flag, and the sibling Q25 split it stands for.
 var previews = map[string]string{"enrollments.import": "enrollments.previewImport"}
 
 // group is `tmh <path...>`: its methods and nested resources.
@@ -94,9 +102,18 @@ func (g *generator) groups(resources []irResource) ([]*group, error) {
 			target.methods = append(target.methods, method)
 		}
 	}
+	for _, grp := range byPath {
+		for _, m := range grp.methods {
+			if m.PreviewMethod != "" && !slices.ContainsFunc(grp.methods, func(sibling resource.Method) bool {
+				return sibling.Name == m.PreviewMethod
+			}) {
+				return nil, fmt.Errorf("%s: --preview stands for %s, which is not a sibling method", m.Name, m.PreviewMethod)
+			}
+		}
+	}
 	rootNames := slices.Clone(rootCommands)
 	for _, root := range roots {
-		name := Kebab(root.path[0])
+		name := kebab(root.path[0])
 		if slices.Contains(rootNames, name) {
 			return nil, fmt.Errorf("resource %s collides with another tmh %s", root.path[0], name)
 		}
@@ -108,7 +125,7 @@ func (g *generator) groups(resources []irResource) ([]*group, error) {
 			names = append(names, strings.Fields(m.Use)[0])
 		}
 		for _, child := range grp.children {
-			names = append(names, Kebab(child.path[len(child.path)-1]))
+			names = append(names, kebab(child.path[len(child.path)-1]))
 		}
 		for i, name := range names {
 			if slices.Contains(names[:i], name) {
@@ -155,7 +172,7 @@ func (g *generator) method(resourcePath []string, m irMethod) (resource.Method, 
 		return method, err
 	}
 	method.Path = path
-	use := []string{Kebab(m.Name)}
+	use := []string{kebab(m.Name)}
 	for _, p := range m.PathParams {
 		if p.Type.Kind != "primitive" || (p.Type.Type != "string" && p.Type.Type != "integer") {
 			return method, fmt.Errorf("path parameter %s is not a string or integer", p.Name)
@@ -212,13 +229,11 @@ func (g *generator) method(resourcePath []string, m irMethod) (resource.Method, 
 			return method, err
 		}
 	}
-	if preview, ok := previews[method.Name]; ok {
-		method.Preview = strings.ReplaceAll(Kebab(preview), ".", " ")
-	}
+	method.PreviewMethod = previews[method.Name]
 	if err := checkFlagNames(method); err != nil {
 		return method, err
 	}
-	method.Long = long(m, body)
+	method.Long = long(m, method, body)
 	return method, nil
 }
 
@@ -273,7 +288,7 @@ func (g *generator) path(m irMethod) (string, error) {
 }
 
 func (g *generator) queryFlag(p irParam) (resource.Flag, error) {
-	flag := resource.Flag{Name: Kebab(p.Name), Path: []string{p.Name}, Required: p.Required}
+	flag := resource.Flag{Name: kebab(p.Name), Path: []string{p.Name}, Required: p.Required}
 	kind, values, ok := g.scalar(p.Type)
 	if !ok {
 		return flag, fmt.Errorf("query parameter %s has a type a flag can't hold", p.Name)
@@ -429,7 +444,7 @@ func (w *fieldWalker) field(path []string, field irField, required bool, seen ma
 	key := strings.Join(path, ".")
 	if kind, values, ok := w.g.scalar(field.Type); ok {
 		return w.add(resource.Flag{
-			Name:   Kebab(key),
+			Name:   kebab(key),
 			Path:   path,
 			Type:   kind,
 			Values: values,
@@ -490,7 +505,7 @@ func (w *fieldWalker) union(path []string, t irType, required bool, seen map[str
 				fieldPath := append(slices.Clone(path), field.Name)
 				values := slices.Sorted(maps.Keys(d.Mapping))
 				if err := w.add(resource.Flag{
-					Name:   Kebab(strings.Join(fieldPath, ".")),
+					Name:   kebab(strings.Join(fieldPath, ".")),
 					Path:   fieldPath,
 					Type:   resource.String,
 					Values: values,
@@ -554,7 +569,7 @@ func checkFlagNames(method resource.Method) error {
 	if method.ReturnsOperation {
 		extra = append(extra, "wait", "wait-timeout")
 	}
-	if method.Preview != "" {
+	if method.PreviewMethod != "" {
 		extra = append(extra, "preview")
 	}
 	for _, flag := range flags {
@@ -568,7 +583,9 @@ func checkFlagNames(method resource.Method) error {
 	return nil
 }
 
-func long(m irMethod, body bodyHelp) string {
+// long is the command's help: the IR's description, then what the finished
+// method's flags do.
+func long(m irMethod, method resource.Method, body bodyHelp) string {
 	paragraphs := []string{firstNonEmpty(m.Description, firstNonEmpty(m.Summary, humanize(m.Name)))}
 	if body.mergePatch {
 		text := "Fields you leave out keep their current values."
@@ -585,14 +602,14 @@ func long(m irMethod, body bodyHelp) string {
 		paragraphs = append(paragraphs, fmt.Sprintf("Set %s, or send the whole body with --data @file.json.",
 			strings.Join(examples, ", ")))
 	}
-	switch m.Response.Kind {
-	case "page":
+	switch {
+	case method.Pagination != nil:
 		paragraphs = append(paragraphs, "--all follows every page, keeping the other flags, and prints all the items "+
 			"as one JSON array, so `| jq` works; add --ndjson to print one compact item per line as each page arrives.")
-	case "operation":
+	case method.ReturnsOperation:
 		text := "--wait polls the Operation until it is done (up to --wait-timeout) and prints it; " +
-			"if it failed, tmh prints its problem and exits 7."
-		if m.Name == "export" {
+			"if it failed, tmh prints its problem and exits as its HTTP status would, or 7 without one."
+		if method.Export {
 			text += " -o <file> saves the finished export's CSV instead."
 		}
 		paragraphs = append(paragraphs, text)
@@ -633,7 +650,7 @@ func firstNonEmpty(value *string, fallback string) string {
 
 // humanize spells an IR name as words: "seatOrders" is "Seat orders".
 func humanize(name string) string {
-	words := strings.ReplaceAll(Kebab(name), "-", " ")
+	words := strings.ReplaceAll(kebab(name), "-", " ")
 	runes := []rune(words)
 	if len(runes) > 0 {
 		runes[0] = unicode.ToUpper(runes[0])
@@ -641,9 +658,9 @@ func humanize(name string) string {
 	return string(runes)
 }
 
-// Kebab is tmh's spelling of an IR name: "upsertByExternalId" is
+// kebab is tmh's spelling of an IR name: "upsertByExternalId" is
 // "upsert-by-external-id", and dotted names stay dotted.
-func Kebab(name string) string {
+func kebab(name string) string {
 	var out strings.Builder
 	runes := []rune(name)
 	for i, r := range runes {

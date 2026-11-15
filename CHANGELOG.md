@@ -39,7 +39,8 @@ Generated from the Developer API document release `waggish-wombat`.
   and with `--forward-to` POSTs each Event to a local endpoint signed like a
   Delivery with a per-profile local Signing secret; `tmh events resend` and
   `tmh webhooks trigger-test`.
-- Raw `tmh get|post|patch|put|delete <path>` requests, `tmh open`, shell
+- Raw `tmh get|post|patch|put|delete <path>` requests, unauthenticated for
+  the API's public paths or with `--no-auth`, `tmh open`, shell
   completion for bash, zsh, fish and PowerShell, `tmh version`, and a daily
   new-version notice that `TMH_NO_UPDATE_CHECK` turns off. No telemetry.
 - Release builds for macOS, Linux and Windows on amd64 and arm64: archives,

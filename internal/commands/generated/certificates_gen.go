@@ -24,7 +24,7 @@ var certificatesMethods = []resource.Method{
 		Name:                   "certificates.export",
 		Use:                    "export",
 		Short:                  "Export certificates",
-		Long:                   "Exports the organization's certificate records as CSV. Requires the `certificates:read` scope.\n\n--wait polls the Operation until it is done (up to --wait-timeout) and prints it; if it failed, tmh prints its problem and exits 7. -o <file> saves the finished export's CSV instead.\n\nScopes: certificates:read",
+		Long:                   "Exports the organization's certificate records as CSV. Requires the `certificates:read` scope.\n\n--wait polls the Operation until it is done (up to --wait-timeout) and prints it; if it failed, tmh prints its problem and exits as its HTTP status would, or 7 without one. -o <file> saves the finished export's CSV instead.\n\nScopes: certificates:read",
 		HTTPMethod:             "POST",
 		Path:                   "/certificates:export",
 		OrganizationScoped:     true,

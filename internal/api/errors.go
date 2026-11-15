@@ -37,6 +37,8 @@ type Error struct {
 	message        string
 }
 
+// Error is the problem's title and detail, or what was wrong with the
+// response.
 func (e *Error) Error() string { return e.message }
 
 // isJSON guards every parse: unknown paths answer 200 with an HTML page.

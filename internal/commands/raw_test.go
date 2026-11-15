@@ -3,6 +3,7 @@ package commands_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/testkit"
@@ -208,7 +209,7 @@ func TestRawWritesAreRetriedOnlyWhenTheyCarryAKeyThatCounts(t *testing.T) {
 		{"PUT without a key", []string{"put", upsertPath, "-d", "email=ana@example.com"}, upsertRoute, 1},
 		{"PUT with --idempotency-key", []string{"put", upsertPath, "-d", "email=ana@example.com", "--idempotency-key", "sync-1"}, upsertRoute, 2},
 		{"PATCH with --idempotency-key", []string{"patch", "/organizations/{orgId}/learners/" + testkit.LearnerID, "-d", "name=Ana", "--idempotency-key", "sync-1"}, learnerPatchRoute, 1},
-		{"DELETE with --idempotency-key", []string{"delete", "/organizations/{orgId}/webhook-subscriptions/" + testkit.SubscriptionID, "--idempotency-key", "sync-1"}, testkit.DeleteWebhookRoute, 1},
+		{"DELETE with --idempotency-key", []string{"delete", "/organizations/{orgId}/webhook-subscriptions/" + testkit.SubscriptionID, "--idempotency-key", "sync-1"}, testkit.DeleteWebhookSubscriptionRoute, 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -256,14 +257,90 @@ func TestRawPathWithoutOrgIDSkipsIntrospection(t *testing.T) {
 	env.Vars["TMH_CLIENT_SECRET"] = testkit.ClientSecret
 	env.Transport.
 		Script(testkit.TokenRoute, testkit.TokenReply("jwt-1", 900)).
-		Script("GET /v1/certificate-verifications/ABC-123", testkit.JSON(`{"valid":true}`))
+		Script("GET /v1/partners/ptn_01JD8P", testkit.JSON(`{"partnerId":"ptn_01JD8P"}`))
 
-	result := env.Run("get", "/certificate-verifications/ABC-123?expand=course")
+	result := env.Run("get", "/partners/ptn_01JD8P?expand=organizations")
 
 	if result.ExitCode != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", result.ExitCode, result.Stderr)
 	}
-	if got := env.Transport.Requests()[1].URL; got != "https://api-teachmehipaa-dev.web.app/v1/certificate-verifications/ABC-123?expand=course" {
+	if got := env.Transport.Requests()[1].URL; got != "https://api-teachmehipaa-dev.web.app/v1/partners/ptn_01JD8P?expand=organizations" {
 		t.Errorf("URL = %s", got)
+	}
+}
+
+func TestRawRequestsToPublicOperationsNeedNoLogin(t *testing.T) {
+	tests := []struct {
+		path  string
+		route string
+	}{
+		{"/courses", "GET /v1/courses"},
+		{"/v1/courses/hipaa-2026", "GET /v1/courses/hipaa-2026"},
+		{"/certificate-verifications/ABC-123?expand=course", "GET /v1/certificate-verifications/ABC-123"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			env := testkit.NewEnv(t)
+			env.Transport.Script(tt.route, testkit.JSON(`{}`))
+
+			result := env.Run("get", tt.path)
+
+			if result.ExitCode != 0 {
+				t.Fatalf("exit code = %d, stderr = %q", result.ExitCode, result.Stderr)
+			}
+			if routes := env.Transport.Routes(); len(routes) != 1 || routes[0] != tt.route {
+				t.Fatalf("routes = %v, want only %s", routes, tt.route)
+			}
+			assertHeader(t, env.Transport.Requests()[0], "Authorization", "")
+		})
+	}
+}
+
+func TestRawRequestsToOtherPathsStillNeedALogin(t *testing.T) {
+	for _, args := range [][]string{
+		{"post", "/courses"},
+		{"get", "/courses/hipaa-2026/learners"},
+		{"get", "/partners/ptn_01JD8P"},
+	} {
+		env := testkit.NewEnv(t)
+
+		result := env.Run(args...)
+
+		if result.ExitCode != 2 {
+			t.Errorf("tmh %v: exit code = %d, want 2; stderr = %q", args, result.ExitCode, result.Stderr)
+		}
+		if routes := env.Transport.Routes(); len(routes) != 0 {
+			t.Errorf("tmh %v: sent %v, want no requests", args, routes)
+		}
+	}
+}
+
+func TestRawNoAuthSendsNoToken(t *testing.T) {
+	env := testkit.NewEnv(t)
+	env.Vars["TMH_CLIENT_ID"] = testkit.ClientID
+	env.Vars["TMH_CLIENT_SECRET"] = testkit.ClientSecret
+	env.Transport.Script("GET /v1/partners/ptn_01JD8P", problem(401, "unauthorized"))
+
+	result := env.Run("get", "/partners/ptn_01JD8P", "--no-auth")
+
+	if result.ExitCode != 2 {
+		t.Errorf("exit code = %d, want 2; stderr = %q", result.ExitCode, result.Stderr)
+	}
+	if routes := env.Transport.Routes(); len(routes) != 1 || routes[0] != "GET /v1/partners/ptn_01JD8P" {
+		t.Fatalf("routes = %v, want one unauthenticated request and no token mint", routes)
+	}
+	assertHeader(t, env.Transport.Requests()[0], "Authorization", "")
+}
+
+func TestRawNoAuthCantFillTheOrgID(t *testing.T) {
+	env := testkit.NewEnv(t)
+
+	result := env.Run("get", "/organizations/{orgId}/learners", "--no-auth")
+
+	if result.ExitCode != 1 || !strings.Contains(result.Stderr, "{orgId}") {
+		t.Errorf("exit code = %d, stderr = %q; want 1 naming {orgId}", result.ExitCode, result.Stderr)
+	}
+	if routes := env.Transport.Routes(); len(routes) != 0 {
+		t.Errorf("sent %v, want no requests", routes)
 	}
 }

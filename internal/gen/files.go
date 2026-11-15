@@ -67,7 +67,7 @@ func leftovers(dir string, files map[string][]byte) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		if bytes.HasPrefix(contents, []byte(Banner+"\n")) {
+		if bytes.HasPrefix(contents, []byte(banner+"\n")) {
 			names = append(names, name)
 		}
 	}

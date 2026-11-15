@@ -21,9 +21,13 @@ type Clock struct {
 	sleeps []time.Duration
 }
 
-func (c *Clock) Now() time.Time          { return c.now }
+// Now is the clock's current time.
+func (c *Clock) Now() time.Time { return c.now }
+
+// Advance moves the clock on by d.
 func (c *Clock) Advance(d time.Duration) { c.now = c.now.Add(d) }
 
+// Sleep records d and advances by it at once.
 func (c *Clock) Sleep(_ context.Context, d time.Duration) error {
 	c.sleeps = append(c.sleeps, d)
 	c.Advance(d)
@@ -61,18 +65,23 @@ type Env struct {
 	// ForwardTransport carries `--forward-to` requests, normally to an
 	// httptest server.
 	ForwardTransport http.RoundTripper
+	// UpdateTransport answers the version check's requests to
+	// api.github.com.
+	UpdateTransport *Transport
 }
 
+// NewEnv is a fresh machine: logged out, with an empty config dir and a
+// clock at 2026-11-15 12:00 UTC.
 func NewEnv(t testing.TB) *Env {
 	return &Env{
-		Transport: NewTransport(t),
-		Keyring:   keyring.NewMemory(),
-		Clock:     &Clock{now: time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)},
-		ConfigDir: t.TempDir(),
-		Vars:      map[string]string{},
-		Build:     version.Info{Version: "1.2.0", Commit: "abc1234", Date: "2026-11-01T00:00:00Z"},
-
+		Transport:        NewTransport(t),
+		Keyring:          keyring.NewMemory(),
+		Clock:            &Clock{now: time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)},
+		ConfigDir:        t.TempDir(),
+		Vars:             map[string]string{},
+		Build:            version.Info{Version: "1.2.0", Commit: "abc1234", Date: "2026-11-01T00:00:00Z"},
 		ForwardTransport: http.DefaultTransport,
+		UpdateTransport:  NewTransport(t),
 	}
 }
 
@@ -93,20 +102,21 @@ func (e *Env) Run(args ...string) Result {
 func (e *Env) RunContext(ctx context.Context, args ...string) Result {
 	var stdout, stderr bytes.Buffer
 	code := commands.Execute(ctx, cmdutil.Deps{
-		Transport:        e.Transport,
-		ForwardTransport: e.ForwardTransport,
-		Keyring:          e.Keyring,
-		Clock:            e.Clock,
-		Stdin:            strings.NewReader(e.Stdin),
-		Stdout:           &stdout,
-		Stderr:           &stderr,
-		LookupEnv:        e.lookup,
-		StdinIsTTY:       e.StdinIsTTY,
-		StdoutIsTTY:      e.StdoutIsTTY,
-		StderrIsTTY:      e.StderrIsTTY,
-		ConfigDir:        e.ConfigDir,
-		OpenBrowser:      e.openBrowser(),
-		Build:            e.Build,
+		Transport:            e.Transport,
+		ForwardTransport:     e.ForwardTransport,
+		UpdateCheckTransport: e.UpdateTransport,
+		Keyring:              e.Keyring,
+		Clock:                e.Clock,
+		Stdin:                strings.NewReader(e.Stdin),
+		Stdout:               &stdout,
+		Stderr:               &stderr,
+		LookupEnv:            e.lookup,
+		StdinIsTTY:           e.StdinIsTTY,
+		StdoutIsTTY:          e.StdoutIsTTY,
+		StderrIsTTY:          e.StderrIsTTY,
+		ConfigDir:            e.ConfigDir,
+		OpenBrowser:          e.openBrowser(),
+		Build:                e.Build,
 	}, args)
 	return Result{Stdout: stdout.String(), Stderr: stderr.String(), ExitCode: code}
 }

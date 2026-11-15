@@ -42,6 +42,7 @@ type StateStore struct {
 	Dir string
 }
 
+// Path is state.toml's location.
 func (s StateStore) Path() string { return filepath.Join(s.Dir, "state.toml") }
 
 // Load returns the zero State when nothing was saved yet.
@@ -54,6 +55,7 @@ func (s StateStore) Load() (State, error) {
 	return state, nil
 }
 
+// Save replaces state.toml atomically.
 func (s StateStore) Save(state State) error {
 	return writeTOML(s.Dir, s.Path(), state)
 }

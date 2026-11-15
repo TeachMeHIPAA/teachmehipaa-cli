@@ -3,6 +3,8 @@
 package generated
 
 import (
+	"slices"
+
 	"github.com/spf13/cobra"
 
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/cmdutil"
@@ -30,5 +32,29 @@ func Register(root *cobra.Command, f *cmdutil.Factory) {
 		resource.NewGroup(f, "seat-orders", "Seat orders", seatOrdersMethods),
 		resource.NewGroup(f, "seats", "Seats", seatsMethods),
 		resource.NewGroup(f, "webhook-subscriptions", "Webhook subscriptions", webhookSubscriptionsMethods),
+	)
+}
+
+// Methods is every method in the IR, for commands that need to know which
+// API paths exist without running one.
+func Methods() []resource.Method {
+	return slices.Concat(
+		auditEventsMethods,
+		authMethods,
+		certificateVerificationsMethods,
+		certificatesMethods,
+		complianceMethods,
+		coursesMethods,
+		enrollmentsMethods,
+		eventsMethods,
+		learnersMethods,
+		membersMethods,
+		operationsMethods,
+		partnersMethods,
+		partnersOrganizationsMethods,
+		paymentMethodMethods,
+		seatOrdersMethods,
+		seatsMethods,
+		webhookSubscriptionsMethods,
 	)
 }

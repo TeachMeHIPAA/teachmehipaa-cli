@@ -11,9 +11,24 @@ import (
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/output"
 )
 
-type page struct {
-	Items      []json.RawMessage `json:"items"`
-	NextCursor *string           `json:"nextCursor"`
+// Page is one page of a list, as every list method answers.
+type Page struct {
+	Items []json.RawMessage `json:"items"`
+	// NextCursor is null on the last page.
+	NextCursor *string `json:"nextCursor"`
+}
+
+// FetchPage sends a list request and reads the page it answers with.
+func FetchPage(ctx context.Context, client *api.Client, request api.Request) (Page, error) {
+	response, err := client.Do(ctx, request)
+	if err != nil {
+		return Page{}, err
+	}
+	var page Page
+	if err := json.Unmarshal(response.Body, &page); err != nil {
+		return Page{}, fmt.Errorf("reading the list page: %w", err)
+	}
+	return page, nil
 }
 
 // listAll requests page after page with the same filters and page size
@@ -21,13 +36,9 @@ type page struct {
 // some filters apply per page (api-sdk-surface.md §4).
 func listAll(ctx context.Context, client *api.Client, request api.Request, pagination *Pagination, items *output.Items) error {
 	for {
-		response, err := client.Do(ctx, request)
+		current, err := FetchPage(ctx, client, request)
 		if err != nil {
 			return err
-		}
-		var current page
-		if err := json.Unmarshal(response.Body, &current); err != nil {
-			return fmt.Errorf("reading the list page: %w", err)
 		}
 		for _, item := range current.Items {
 			if err := items.Write(item); err != nil {
@@ -49,7 +60,7 @@ func listAll(ctx context.Context, client *api.Client, request api.Request, pagin
 	}
 }
 
-func nextPage(pagination *Pagination, current page) (string, error) {
+func nextPage(pagination *Pagination, current Page) (string, error) {
 	if pagination.ItemID == "" || len(current.Items) == 0 {
 		return *current.NextCursor, nil
 	}

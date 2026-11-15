@@ -2,6 +2,7 @@ package commands_test
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -27,7 +28,7 @@ func onATerminal(t *testing.T) *testkit.Env {
 
 func TestANewerReleaseIsAnnouncedOnStderr(t *testing.T) {
 	env := onATerminal(t)
-	env.Transport.Script(latestReleaseRoute, latestRelease("v1.3.0"))
+	env.UpdateTransport.Script(latestReleaseRoute, latestRelease("v1.3.0"))
 
 	result := env.Run("version")
 
@@ -42,7 +43,7 @@ func TestANewerReleaseIsAnnouncedOnStderr(t *testing.T) {
 	if result.Stderr != want {
 		t.Errorf("stderr = %q, want %q", result.Stderr, want)
 	}
-	request := env.Transport.Requests()[0]
+	request := env.UpdateTransport.Requests()[0]
 	if request.URL != "https://api.github.com/repos/TeachMeHIPAA/teachmehipaa-cli/releases/latest" {
 		t.Errorf("URL = %s", request.URL)
 	}
@@ -63,14 +64,14 @@ func TestNoNoticeUnlessTheReleaseIsNewer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			env := onATerminal(t)
 			env.Build.Version = tt.current
-			env.Transport.Script(latestReleaseRoute, latestRelease(tt.latest))
+			env.UpdateTransport.Script(latestReleaseRoute, latestRelease(tt.latest))
 
 			result := env.Run("version")
 
 			if result.Stderr != "" {
 				t.Errorf("stderr = %q, want no notice", result.Stderr)
 			}
-			if n := countRoute(env, latestReleaseRoute); n != 1 {
+			if n := len(env.UpdateTransport.Routes()); n != 1 {
 				t.Errorf("release checks = %d, want 1", n)
 			}
 		})
@@ -80,7 +81,7 @@ func TestNoNoticeUnlessTheReleaseIsNewer(t *testing.T) {
 func TestAReleaseOfAPrereleaseBuildIsNewer(t *testing.T) {
 	env := onATerminal(t)
 	env.Build.Version = "1.3.0-rc.1"
-	env.Transport.Script(latestReleaseRoute, latestRelease("v1.3.0"))
+	env.UpdateTransport.Script(latestReleaseRoute, latestRelease("v1.3.0"))
 
 	result := env.Run("version")
 
@@ -93,7 +94,7 @@ func TestAReleaseOfAPrereleaseBuildIsNewer(t *testing.T) {
 
 func TestTheReleaseCheckRunsAtMostOnceADay(t *testing.T) {
 	env := onATerminal(t)
-	env.Transport.Script(latestReleaseRoute, latestRelease("v1.3.0"), latestRelease("v1.3.0"))
+	env.UpdateTransport.Script(latestReleaseRoute, latestRelease("v1.3.0"), latestRelease("v1.3.0"))
 
 	first := env.Run("version")
 	env.Clock.Advance(24*time.Hour - time.Second)
@@ -101,7 +102,7 @@ func TestTheReleaseCheckRunsAtMostOnceADay(t *testing.T) {
 	env.Clock.Advance(time.Second)
 	third := env.Run("version")
 
-	if n := countRoute(env, latestReleaseRoute); n != 2 {
+	if n := len(env.UpdateTransport.Routes()); n != 2 {
 		t.Errorf("release checks = %d, want 2 (first run and 24 h later)", n)
 	}
 	if first.Stderr == "" || second.Stderr != "" || third.Stderr == "" {
@@ -129,7 +130,7 @@ func TestTheReleaseCheckIsOffWhereNobodyWouldSeeIt(t *testing.T) {
 			if result.ExitCode != 0 || result.Stderr != "" {
 				t.Errorf("exit code = %d, stderr = %q; want 0 and nothing", result.ExitCode, result.Stderr)
 			}
-			if routes := env.Transport.Routes(); len(routes) != 0 {
+			if routes := slices.Concat(env.Transport.Routes(), env.UpdateTransport.Routes()); len(routes) != 0 {
 				t.Errorf("sent %v, want no requests", routes)
 			}
 		})
@@ -143,7 +144,7 @@ func TestCompletionNeverChecksForReleases(t *testing.T) {
 
 			env.Run(args...)
 
-			if routes := env.Transport.Routes(); len(routes) != 0 {
+			if routes := slices.Concat(env.Transport.Routes(), env.UpdateTransport.Routes()); len(routes) != 0 {
 				t.Errorf("sent %v, want no requests", routes)
 			}
 		})
@@ -164,7 +165,7 @@ func TestAFailedReleaseCheckNeverFailsTheCommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			env := onATerminal(t)
-			env.Transport.Script(latestReleaseRoute, tt.reply)
+			env.UpdateTransport.Script(latestReleaseRoute, tt.reply)
 
 			result := env.Run("version")
 
@@ -177,7 +178,7 @@ func TestAFailedReleaseCheckNeverFailsTheCommand(t *testing.T) {
 
 func TestASlowReleaseCheckHoldsTheCommandAboutASecondAtMost(t *testing.T) {
 	env := onATerminal(t)
-	env.Transport.Script(latestReleaseRoute, testkit.Reply{Hang: true})
+	env.UpdateTransport.Script(latestReleaseRoute, testkit.Reply{Hang: true})
 
 	started := time.Now()
 	result := env.Run("version")
@@ -195,8 +196,8 @@ func TestTheReleaseNoticeFollowsAFailedCommand(t *testing.T) {
 	env := onATerminal(t)
 	env.Vars["TMH_CLIENT_ID"] = testkit.ClientID
 	env.Vars["TMH_CLIENT_SECRET"] = testkit.ClientSecret
+	env.UpdateTransport.Script(latestReleaseRoute, latestRelease("v1.3.0"))
 	env.Transport.
-		Script(latestReleaseRoute, latestRelease("v1.3.0")).
 		Script(testkit.TokenRoute, testkit.TokenReply("jwt-1", 900)).
 		Script(testkit.IntrospectionRoute, testkit.IntrospectionReply("test")).
 		Script(testkit.LearnerRoute, problem(404, "not_found"))
@@ -218,8 +219,8 @@ func TestTmhTalksOnlyToTheAPIAndTheReleaseCheck(t *testing.T) {
 	env := onATerminal(t)
 	env.Vars["TMH_CLIENT_ID"] = testkit.ClientID
 	env.Vars["TMH_CLIENT_SECRET"] = testkit.ClientSecret
+	env.UpdateTransport.Script(latestReleaseRoute, latestRelease("v1.2.0"))
 	env.Transport.
-		Script(latestReleaseRoute, latestRelease("v1.2.0")).
 		Script(testkit.TokenRoute, testkit.TokenReply("jwt-1", 900)).
 		Script(testkit.IntrospectionRoute, testkit.IntrospectionReply("test")).
 		Script(testkit.LearnerRoute, testkit.JSON(testkit.LearnerBody))
@@ -237,12 +238,16 @@ func TestTmhTalksOnlyToTheAPIAndTheReleaseCheck(t *testing.T) {
 	}
 
 	for _, r := range env.Transport.Requests() {
-		host := strings.SplitN(strings.TrimPrefix(r.URL, "https://"), "/", 2)[0]
-		if host != "api-teachmehipaa-dev.web.app" && host != "api.github.com" {
-			t.Errorf("request to %s, want only the API and api.github.com", r.URL)
+		if host := strings.SplitN(strings.TrimPrefix(r.URL, "https://"), "/", 2)[0]; host != "api-teachmehipaa-dev.web.app" {
+			t.Errorf("API transport carried %s, want only the API", r.URL)
 		}
 	}
-	if n := countRoute(env, latestReleaseRoute); n != 1 {
+	for _, r := range env.UpdateTransport.Requests() {
+		if r.URL != "https://api.github.com/repos/TeachMeHIPAA/teachmehipaa-cli/releases/latest" {
+			t.Errorf("version check transport carried %s, want only the latest-release lookup", r.URL)
+		}
+	}
+	if n := len(env.UpdateTransport.Routes()); n != 1 {
 		t.Errorf("release checks = %d, want 1", n)
 	}
 }

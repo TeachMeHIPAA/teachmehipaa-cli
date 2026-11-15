@@ -7,7 +7,9 @@ import (
 	"time"
 )
 
+// Clock is where tmh reads the time and waits.
 type Clock interface {
+	// Now is the current time.
 	Now() time.Time
 	// Sleep waits for d, or returns the context's error if it ends first.
 	Sleep(ctx context.Context, d time.Duration) error
