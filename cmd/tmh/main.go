@@ -28,20 +28,21 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	code := commands.Execute(ctx, cmdutil.Deps{
-		Transport:   http.DefaultTransport,
-		Keyring:     keyring.System(),
-		Clock:       clock.System(),
-		Stdin:       os.Stdin,
-		Stdout:      os.Stdout,
-		Stderr:      os.Stderr,
-		LookupEnv:   os.LookupEnv,
-		StdinIsTTY:  term.IsTerminal(int(os.Stdin.Fd())),
-		StdoutIsTTY: term.IsTerminal(int(os.Stdout.Fd())),
-		StderrIsTTY: term.IsTerminal(int(os.Stderr.Fd())),
-		ReadSecret:  readHiddenSecret,
-		ConfigDir:   configDir,
-		OpenBrowser: browserOpener(runtime.GOOS, exec.LookPath),
-		Build:       version.Current(),
+		Transport:        http.DefaultTransport,
+		ForwardTransport: http.DefaultTransport,
+		Keyring:          keyring.System(),
+		Clock:            clock.System(),
+		Stdin:            os.Stdin,
+		Stdout:           os.Stdout,
+		Stderr:           os.Stderr,
+		LookupEnv:        os.LookupEnv,
+		StdinIsTTY:       term.IsTerminal(int(os.Stdin.Fd())),
+		StdoutIsTTY:      term.IsTerminal(int(os.Stdout.Fd())),
+		StderrIsTTY:      term.IsTerminal(int(os.Stderr.Fd())),
+		ReadSecret:       readHiddenSecret,
+		ConfigDir:        configDir,
+		OpenBrowser:      browserOpener(runtime.GOOS, exec.LookPath),
+		Build:            version.Current(),
 	}, os.Args[1:])
 	stop()
 	os.Exit(code)

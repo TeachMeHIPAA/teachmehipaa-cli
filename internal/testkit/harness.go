@@ -3,6 +3,7 @@ package testkit
 import (
 	"bytes"
 	"context"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -54,6 +55,9 @@ type Env struct {
 	BrowserErr error
 	// Build is the tmh build under test.
 	Build version.Info
+	// ForwardTransport carries `--forward-to` requests, normally to an
+	// httptest server.
+	ForwardTransport http.RoundTripper
 }
 
 func NewEnv(t testing.TB) *Env {
@@ -64,6 +68,8 @@ func NewEnv(t testing.TB) *Env {
 		ConfigDir: t.TempDir(),
 		Vars:      map[string]string{},
 		Build:     version.Info{Version: "1.2.0", Commit: "abc1234", Date: "2026-11-01T00:00:00Z"},
+
+		ForwardTransport: http.DefaultTransport,
 	}
 }
 
@@ -76,21 +82,28 @@ type Result struct {
 
 // Run executes `tmh <args>`.
 func (e *Env) Run(args ...string) Result {
+	return e.RunContext(context.Background(), args...)
+}
+
+// RunContext executes `tmh <args>` until it ends or ctx is cancelled, as
+// Ctrl-C does.
+func (e *Env) RunContext(ctx context.Context, args ...string) Result {
 	var stdout, stderr bytes.Buffer
-	code := commands.Execute(context.Background(), cmdutil.Deps{
-		Transport:   e.Transport,
-		Keyring:     e.Keyring,
-		Clock:       e.Clock,
-		Stdin:       strings.NewReader(e.Stdin),
-		Stdout:      &stdout,
-		Stderr:      &stderr,
-		LookupEnv:   e.lookup,
-		StdinIsTTY:  e.StdinIsTTY,
-		StdoutIsTTY: e.StdoutIsTTY,
-		StderrIsTTY: e.StderrIsTTY,
-		ConfigDir:   e.ConfigDir,
-		OpenBrowser: e.openBrowser(),
-		Build:       e.Build,
+	code := commands.Execute(ctx, cmdutil.Deps{
+		Transport:        e.Transport,
+		ForwardTransport: e.ForwardTransport,
+		Keyring:          e.Keyring,
+		Clock:            e.Clock,
+		Stdin:            strings.NewReader(e.Stdin),
+		Stdout:           &stdout,
+		Stderr:           &stderr,
+		LookupEnv:        e.lookup,
+		StdinIsTTY:       e.StdinIsTTY,
+		StdoutIsTTY:      e.StdoutIsTTY,
+		StderrIsTTY:      e.StderrIsTTY,
+		ConfigDir:        e.ConfigDir,
+		OpenBrowser:      e.openBrowser(),
+		Build:            e.Build,
 	}, args)
 	return Result{Stdout: stdout.String(), Stderr: stderr.String(), ExitCode: code}
 }

@@ -36,6 +36,10 @@ type Store struct {
 
 type fileConfig struct {
 	Profiles map[string]fileProfile `toml:"profiles,omitempty"`
+	// LocalSigningSecrets holds a profile's local Signing secret when the
+	// keyring is unusable. It lives outside Profiles so logging out keeps
+	// it, and partners needn't reconfigure their handler.
+	LocalSigningSecrets map[string]string `toml:"local_signing_secrets,omitempty"`
 }
 
 type fileProfile struct {
@@ -101,6 +105,35 @@ func (s Store) Delete(profile string) (bool, error) {
 	}
 	delete(config.Profiles, profile)
 	return true, s.write(config)
+}
+
+// LocalSigningSecret is the profile's local Signing secret for
+// `tmh events tail --forward-to`, created by generate on first use and kept
+// in the keyring, or config.toml when the keyring is unusable.
+func (s Store) LocalSigningSecret(profile string, generate func() (string, error)) (string, error) {
+	user := profile + ":local-signing-secret"
+	if secret, err := s.Keyring.Get(keyringService, user); err == nil {
+		return secret, nil
+	}
+	config, err := s.read()
+	if err != nil {
+		return "", err
+	}
+	if secret := config.LocalSigningSecrets[profile]; secret != "" {
+		return secret, nil
+	}
+	secret, err := generate()
+	if err != nil {
+		return "", err
+	}
+	if s.Keyring.Set(keyringService, user, secret) == nil {
+		return secret, nil
+	}
+	if config.LocalSigningSecrets == nil {
+		config.LocalSigningSecrets = map[string]string{}
+	}
+	config.LocalSigningSecrets[profile] = secret
+	return secret, s.write(config)
 }
 
 func (s Store) read() (fileConfig, error) {

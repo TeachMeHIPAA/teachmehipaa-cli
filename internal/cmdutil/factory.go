@@ -26,12 +26,16 @@ import (
 // the real ones; tests pass fakes.
 type Deps struct {
 	Transport http.RoundTripper
-	Keyring   keyring.Keyring
-	Clock     clock.Clock
-	Stdin     io.Reader
-	Stdout    io.Writer
-	Stderr    io.Writer
-	LookupEnv func(name string) (string, bool)
+	// ForwardTransport carries `--forward-to` requests to the developer's
+	// own server. It is separate so those never pass through anything
+	// meant for the API.
+	ForwardTransport http.RoundTripper
+	Keyring          keyring.Keyring
+	Clock            clock.Clock
+	Stdin            io.Reader
+	Stdout           io.Writer
+	Stderr           io.Writer
+	LookupEnv        func(name string) (string, bool)
 	// StdinIsTTY means a person can answer prompts.
 	StdinIsTTY bool
 	// StdoutIsTTY selects pretty, colored output over compact JSON.
@@ -94,6 +98,12 @@ func (f *Factory) IdempotencyKey(required bool) string {
 type UsageError struct{ Message string }
 
 func (e *UsageError) Error() string { return e.Message }
+
+// NotFoundError is something tmh looked for and the API doesn't have, found
+// without a 404 from it.
+type NotFoundError struct{ Message string }
+
+func (e *NotFoundError) Error() string { return e.Message }
 
 func (f *Factory) Profile() (config.Profile, error) {
 	if f.profileName == "" {

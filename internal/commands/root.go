@@ -62,6 +62,7 @@ See "tmh completion <shell> --help" to install it permanently.`,
 	root.AddCommand(newRawCommands(f)...)
 	root.AddCommand(newOpenCommand(f), newVersionCommand(deps.Build))
 	generated.Register(root, f)
+	addEventCommands(root, f)
 	return root
 }
 
@@ -98,11 +99,14 @@ func exitCode(err error) int {
 	var apiErr *api.Error
 	var connectionErr *api.ConnectionError
 	var notLoggedIn *cmdutil.NotLoggedInError
+	var notFound *cmdutil.NotFoundError
 	switch {
 	case err == nil:
 		return exitOK
 	case errors.As(err, &notLoggedIn):
 		return exitAuth
+	case errors.As(err, &notFound):
+		return exitNotFound
 	case errors.As(err, &connectionErr):
 		return exitServer
 	case errors.As(err, &apiErr):

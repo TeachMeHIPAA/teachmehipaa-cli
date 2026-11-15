@@ -14,6 +14,27 @@ import (
 type State struct {
 	// UpdateCheckedAt is when tmh last asked GitHub for its latest release.
 	UpdateCheckedAt time.Time `toml:"update_checked_at,omitempty"`
+	// EventCursors is the last Event `tmh events tail` saw, by profile
+	// name, then Organization id.
+	EventCursors map[string]map[string]string `toml:"event_cursors,omitempty"`
+}
+
+// EventCursor is where `tmh events tail` stopped for the profile and
+// Organization, or "" when it never ran for them.
+func (s State) EventCursor(profile, organizationID string) string {
+	return s.EventCursors[profile][organizationID]
+}
+
+// SetEventCursor records the last Event seen for the profile and
+// Organization.
+func (s *State) SetEventCursor(profile, organizationID, eventID string) {
+	if s.EventCursors == nil {
+		s.EventCursors = map[string]map[string]string{}
+	}
+	if s.EventCursors[profile] == nil {
+		s.EventCursors[profile] = map[string]string{}
+	}
+	s.EventCursors[profile][organizationID] = eventID
 }
 
 // StateStore keeps State in state.toml next to config.toml.
@@ -35,4 +56,15 @@ func (s StateStore) Load() (State, error) {
 
 func (s StateStore) Save(state State) error {
 	return writeTOML(s.Dir, s.Path(), state)
+}
+
+// Update re-reads the state before changing it, so fields another part of
+// the same run saved meanwhile, such as the update check, survive.
+func (s StateStore) Update(change func(*State)) error {
+	state, err := s.Load()
+	if err != nil {
+		return err
+	}
+	change(&state)
+	return s.Save(state)
 }

@@ -1,0 +1,46 @@
+{
+  "_about": "Shared webhook Delivery signing vectors for every TeachMeHIPAA SDK. Signatures were produced by the PLATFORM's own signer: `bun vector/platform-sign.ts vector/input*.json` run from ~/code/tme/sdk-ir, which calls packages/auth-s2s signRequest (method POST, url=endpointUrl, nowMs=Date.parse(timestamp)) on packages/webhooks canonicalizeEventBody(envelope). Cross-checked with vector/replica.mjs (node:crypto only: HMAC-SHA256 hex, key = UTF-8 bytes of secret, over 'POST\\n'+pathAndQuery+'\\n'+timestamp+'\\n'+sha256hex(body)). signatureWithBase64DecodedKey is what a signer that wrongly base64-decodes the secret would produce; SDKs must REJECT it. Body bytes are UTF-8 (the event body contains non-ASCII).",
+  "secret": "4l28+FYKZo2O57actVGINwR/Xyhzt3OtqCipV81/Zd0=",
+  "keyId": "WHSEC-7KQ2-M4XD-9RTB-H3VN",
+  "endpointUrl": "https://partner.example.com/hooks/tmh?source=teachmehipaa",
+  "path": "/hooks/tmh?source=teachmehipaa",
+  "toleranceSeconds": 300,
+  "event": {
+    "eventType": "learner.certified",
+    "eventId": "evt_01JCZ8Y2K5V3M7Q9R4T6W8X0AB",
+    "timestamp": "2026-11-15T16:31:32.123Z",
+    "body": "{\"data\":{\"courseId\":\"hipaa-basics-2026\",\"email\":\"zoë.müller@example.com\",\"externalId\":\"hr-123\",\"learnerId\":\"lrn_4h7j2k\",\"occurredAt\":\"2026-11-15T16:31:30.000Z\",\"status\":\"certified\"},\"eventId\":\"evt_01JCZ8Y2K5V3M7Q9R4T6W8X0AB\",\"eventType\":\"learner.certified\",\"occurredAt\":\"2026-11-15T16:31:30.000Z\",\"orgId\":\"org_9f3k2m\"}",
+    "bodySha256Hex": "0a849105d2fea53433e3284d0dc6dee83ebccdf6e64088bf34bf3b537b6e640b",
+    "canonical": "POST\n/hooks/tmh?source=teachmehipaa\n2026-11-15T16:31:32.123Z\n0a849105d2fea53433e3284d0dc6dee83ebccdf6e64088bf34bf3b537b6e640b",
+    "signature": "c2a0fd14bca6c361c44e84a5b3bf0378b00c49a533636a229c2b6972073b618a",
+    "signatureWithBase64DecodedKey": "26c88e3993dc44d1f52949f6bc1a9061c5e3e9c0b12caf04934e2e4ea3814f2d",
+    "headers": {
+      "x-tmh-key-id": "WHSEC-7KQ2-M4XD-9RTB-H3VN",
+      "x-tmh-timestamp": "2026-11-15T16:31:32.123Z",
+      "x-tmh-signature": "c2a0fd14bca6c361c44e84a5b3bf0378b00c49a533636a229c2b6972073b618a",
+      "x-tmh-body-hash": "0a849105d2fea53433e3284d0dc6dee83ebccdf6e64088bf34bf3b537b6e640b",
+      "x-tmh-event-type": "learner.certified",
+      "x-tmh-event-id": "evt_01JCZ8Y2K5V3M7Q9R4T6W8X0AB",
+      "content-type": "application/json"
+    }
+  },
+  "testDelivery": {
+    "eventType": "learner.certified",
+    "eventId": "3f1c9a52-7d4e-4b8a-9c21-5e6f7a8b9c0d",
+    "timestamp": "2026-11-15T16:40:05.000Z",
+    "body": "{\"subscriptionId\":\"whs_2b8f4c1d\",\"test\":true}",
+    "bodySha256Hex": "42879a05e13a5dfba51eee07c2fef4814ec6009091f1389a8db4403661ce6a66",
+    "canonical": "POST\n/hooks/tmh?source=teachmehipaa\n2026-11-15T16:40:05.000Z\n42879a05e13a5dfba51eee07c2fef4814ec6009091f1389a8db4403661ce6a66",
+    "signature": "b7baa3ae58a738d025adf4e27ce7af833ac6085f5cb1cc5fc8ff1addb191c3b9",
+    "signatureWithBase64DecodedKey": "f1179ed3147ae1cafca03770401dca485476bcb0183458b2a0f91b0deebf318c",
+    "headers": {
+      "x-tmh-key-id": "WHSEC-7KQ2-M4XD-9RTB-H3VN",
+      "x-tmh-timestamp": "2026-11-15T16:40:05.000Z",
+      "x-tmh-signature": "b7baa3ae58a738d025adf4e27ce7af833ac6085f5cb1cc5fc8ff1addb191c3b9",
+      "x-tmh-body-hash": "42879a05e13a5dfba51eee07c2fef4814ec6009091f1389a8db4403661ce6a66",
+      "x-tmh-event-type": "learner.certified",
+      "x-tmh-event-id": "3f1c9a52-7d4e-4b8a-9c21-5e6f7a8b9c0d",
+      "content-type": "application/json"
+    }
+  }
+}
