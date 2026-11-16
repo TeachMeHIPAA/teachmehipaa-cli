@@ -26,7 +26,7 @@ func TestRawGetFillsTheOrgIDFromTheBoundOrganization(t *testing.T) {
 	}
 	requests := env.Transport.Requests()
 	learners := requests[len(requests)-1]
-	if want := "https://api-teachmehipaa-dev.web.app/v1/organizations/org_acme/learners?limit=5&status=in_progress"; learners.URL != want {
+	if want := "https://sandbox.api.tme.so/v1/organizations/org_acme/learners?limit=5&status=in_progress"; learners.URL != want {
 		t.Errorf("URL = %s, want %s", learners.URL, want)
 	}
 	assertHeader(t, learners, "Authorization", "Bearer jwt-1")
@@ -268,7 +268,7 @@ func TestRawPathWithoutOrgIDSkipsIntrospection(t *testing.T) {
 	if routes := env.Transport.Routes(); !slices.Equal(routes, []string{testkit.TokenRoute, testkit.IntrospectionRoute}) {
 		t.Fatalf("routes = %v, want the token then only the requested path", routes)
 	}
-	if got := env.Transport.Requests()[1].URL; got != "https://api-teachmehipaa-dev.web.app/v1/auth/introspection?verbose=true" {
+	if got := env.Transport.Requests()[1].URL; got != "https://sandbox.api.tme.so/v1/auth/introspection?verbose=true" {
 		t.Errorf("URL = %s", got)
 	}
 }

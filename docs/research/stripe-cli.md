@@ -262,7 +262,7 @@ All of these are registered in `Base.InitFlags` ([pkg/requests/base.go](https://
 Our API, from `~/scratch/tmh-sdks/openapi/openapi.developer.json`, has these properties:
 
 - OpenAPI 3.1, 56 operations, all with `operationId` and one of 15 tags. **No `x-` vendor extensions.**
-- Servers: `api.tme.so/v1` and `api-teachmehipaa-dev.web.app/v1`.
+- Servers: `api.tme.so/v1` and `sandbox.api.tme.so/v1`.
 - Auth: OAuth2 client-credentials (15-min JWT, no refresh) plus auth-code+PKCE via `console.teachmehipaa.com/oauth/authorize` (rotating refresh).
 - Errors: RFC 9457 problem+json.
 - Pagination: cursors named `cursor`, or `after` on events.

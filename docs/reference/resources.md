@@ -4,7 +4,7 @@
 
 Every Developer API operation and the `tmh` command that calls it: 13 resources and 45 commands, generated from the Developer API release `trimmed-2026-11-15`. Each command's page in the [command reference](commands/tmh.md) has its full help and every flag; the [Commands guide](../guides/commands.md) explains how arguments, flags and `-d` become a request.
 
-Paths are relative to the Environment's base URL (Live is `https://api.tme.so/v1`; Sandbox is `https://api-teachmehipaa-dev.web.app/v1`). `tmh` fills in `{orgId}` from your credentials' Organization, so it is never an argument. `tmh events tail`, `tmh events resend` and the raw `tmh get|post|patch|put|delete` requests are hand-written, not API operations; see the [command reference](commands/tmh.md).
+Paths are relative to the Environment's base URL (Live is `https://api.tme.so/v1`; Sandbox is `https://sandbox.api.tme.so/v1`). `tmh` fills in `{orgId}` from your credentials' Organization, so it is never an argument. `tmh events tail`, `tmh events resend` and the raw `tmh get|post|patch|put|delete` requests are hand-written, not API operations; see the [command reference](commands/tmh.md).
 
 ## Contents
 

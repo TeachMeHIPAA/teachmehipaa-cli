@@ -48,7 +48,7 @@ Credentials belong to one Environment, so `tmh` keeps one profile for each:
 
 | Profile | Environment | API base URL |
 |---|---|---|
-| `sandbox` (the default) | Sandbox | `https://api-teachmehipaa-dev.web.app/v1` |
+| `sandbox` (the default) | Sandbox | `https://sandbox.api.tme.so/v1` |
 | `live` | Live | `https://api.tme.so/v1` |
 
 Every command uses `sandbox` unless you pass `--live` (or `--profile live`),
