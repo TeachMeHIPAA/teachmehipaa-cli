@@ -33,7 +33,7 @@ func FetchPage(ctx context.Context, client *api.Client, request api.Request) (Pa
 
 // listAll requests page after page with the same filters and page size
 // until nextCursor is null. A short or empty page doesn't end the list:
-// some filters apply per page (api-sdk-surface.md §4).
+// some filters apply per page.
 func listAll(ctx context.Context, client *api.Client, request api.Request, pagination *Pagination, items *output.Items) error {
 	for {
 		current, err := FetchPage(ctx, client, request)

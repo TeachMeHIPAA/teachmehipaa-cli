@@ -11,5 +11,5 @@ header is `User-Agent` (SDK, version, runtime and optional app info).
 
 The CLI's only network calls besides the API are the once-daily version
 check, which is opt-out and sends nothing but a User-Agent with tmh's
-version, OS and arch to api.github.com, and the ones the person asks for:
-`--forward-to` and the Partner app login's OAuth loopback.
+version, OS and arch to api.github.com, and the one the person asks for:
+`--forward-to`.

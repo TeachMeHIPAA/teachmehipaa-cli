@@ -21,7 +21,7 @@ import (
 
 // Method is one IR method as a command.
 type Method struct {
-	// Name is the IR's `resource.method`, e.g. "partners.organizations.list".
+	// Name is the IR's `resource.method`, e.g. "webhookSubscriptions.redrive".
 	Name  string
 	Use   string
 	Short string

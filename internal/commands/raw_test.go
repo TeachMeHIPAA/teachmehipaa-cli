@@ -3,6 +3,7 @@ package commands_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -257,14 +258,17 @@ func TestRawPathWithoutOrgIDSkipsIntrospection(t *testing.T) {
 	env.Vars["TMH_CLIENT_SECRET"] = testkit.ClientSecret
 	env.Transport.
 		Script(testkit.TokenRoute, testkit.TokenReply("jwt-1", 900)).
-		Script("GET /v1/partners/ptn_01JD8P", testkit.JSON(`{"partnerId":"ptn_01JD8P"}`))
+		Script(testkit.IntrospectionRoute, testkit.IntrospectionReply("test"))
 
-	result := env.Run("get", "/partners/ptn_01JD8P?expand=organizations")
+	result := env.Run("get", "/auth/introspection?verbose=true")
 
 	if result.ExitCode != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", result.ExitCode, result.Stderr)
 	}
-	if got := env.Transport.Requests()[1].URL; got != "https://api-teachmehipaa-dev.web.app/v1/partners/ptn_01JD8P?expand=organizations" {
+	if routes := env.Transport.Routes(); !slices.Equal(routes, []string{testkit.TokenRoute, testkit.IntrospectionRoute}) {
+		t.Fatalf("routes = %v, want the token then only the requested path", routes)
+	}
+	if got := env.Transport.Requests()[1].URL; got != "https://api-teachmehipaa-dev.web.app/v1/auth/introspection?verbose=true" {
 		t.Errorf("URL = %s", got)
 	}
 }
@@ -300,7 +304,7 @@ func TestRawRequestsToOtherPathsStillNeedALogin(t *testing.T) {
 	for _, args := range [][]string{
 		{"post", "/courses"},
 		{"get", "/courses/hipaa-2026/learners"},
-		{"get", "/partners/ptn_01JD8P"},
+		{"get", "/auth/introspection"},
 	} {
 		env := testkit.NewEnv(t)
 
@@ -319,14 +323,14 @@ func TestRawNoAuthSendsNoToken(t *testing.T) {
 	env := testkit.NewEnv(t)
 	env.Vars["TMH_CLIENT_ID"] = testkit.ClientID
 	env.Vars["TMH_CLIENT_SECRET"] = testkit.ClientSecret
-	env.Transport.Script("GET /v1/partners/ptn_01JD8P", problem(401, "unauthorized"))
+	env.Transport.Script(testkit.IntrospectionRoute, problem(401, "unauthorized"))
 
-	result := env.Run("get", "/partners/ptn_01JD8P", "--no-auth")
+	result := env.Run("get", "/auth/introspection", "--no-auth")
 
 	if result.ExitCode != 2 {
 		t.Errorf("exit code = %d, want 2; stderr = %q", result.ExitCode, result.Stderr)
 	}
-	if routes := env.Transport.Routes(); len(routes) != 1 || routes[0] != "GET /v1/partners/ptn_01JD8P" {
+	if routes := env.Transport.Routes(); len(routes) != 1 || routes[0] != testkit.IntrospectionRoute {
 		t.Fatalf("routes = %v, want one unauthenticated request and no token mint", routes)
 	}
 	assertHeader(t, env.Transport.Requests()[0], "Authorization", "")

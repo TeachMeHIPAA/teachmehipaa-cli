@@ -26,10 +26,6 @@ func Register(root *cobra.Command, f *cmdutil.Factory) {
 		resource.NewGroup(f, "learners", "Learners", learnersMethods),
 		resource.NewGroup(f, "members", "Members", membersMethods),
 		resource.NewGroup(f, "operations", "Operations", operationsMethods),
-		resource.NewGroup(f, "partners", "Partners", partnersMethods,
-			resource.NewGroup(f, "organizations", "Organizations", partnersOrganizationsMethods)),
-		resource.NewGroup(f, "payment-method", "Payment method", paymentMethodMethods),
-		resource.NewGroup(f, "seat-orders", "Seat orders", seatOrdersMethods),
 		resource.NewGroup(f, "seats", "Seats", seatsMethods),
 		resource.NewGroup(f, "webhook-subscriptions", "Webhook subscriptions", webhookSubscriptionsMethods),
 	)
@@ -50,10 +46,6 @@ func Methods() []resource.Method {
 		learnersMethods,
 		membersMethods,
 		operationsMethods,
-		partnersMethods,
-		partnersOrganizationsMethods,
-		paymentMethodMethods,
-		seatOrdersMethods,
 		seatsMethods,
 		webhookSubscriptionsMethods,
 	)

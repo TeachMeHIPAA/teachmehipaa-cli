@@ -13,7 +13,6 @@ import (
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/api"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/cmdutil"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/commands/generated"
-	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/oauth"
 )
 
 // Exit codes from the CLI spec.
@@ -70,6 +69,17 @@ See "tmh completion <shell> --help" to install it permanently.`,
 	return root
 }
 
+// NewRoot is the command tree Execute runs, with cobra's help and completion
+// commands added as Execute would add them, for generating and checking the
+// command reference without running a command.
+func NewRoot(deps cmdutil.Deps) *cobra.Command {
+	root := newRoot(deps, &updateNotice{deps: deps})
+	root.InitDefaultHelpCmd()
+	root.InitDefaultVersionFlag()
+	root.InitDefaultCompletionCmd()
+	return root
+}
+
 // Execute runs `tmh <args>` and returns the process exit code.
 func Execute(ctx context.Context, deps cmdutil.Deps, args []string) int {
 	notice := &updateNotice{deps: deps}
@@ -109,13 +119,12 @@ func exitCode(err error) int {
 	var notFound *cmdutil.NotFoundError
 	var operationFailed *api.OperationFailedError
 	var operationTimeout *api.OperationTimeoutError
-	var consentErr *oauth.ConsentError
 	switch {
 	case err == nil:
 		return exitOK
 	case errors.Is(err, context.Canceled):
 		return exitInterrupted
-	case errors.As(err, &notLoggedIn), errors.As(err, &consentErr), errors.Is(err, oauth.ErrStateMismatch):
+	case errors.As(err, &notLoggedIn):
 		return exitAuth
 	case errors.As(err, &notFound):
 		return exitNotFound

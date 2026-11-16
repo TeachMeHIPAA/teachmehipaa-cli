@@ -956,10 +956,6 @@
     "auth": {
       "additionalProperties": false,
       "properties": {
-        "authorizeUrl": {
-          "format": "uri",
-          "type": "string"
-        },
         "handWritten": {
           "items": {
             "additionalProperties": false,
@@ -1018,15 +1014,11 @@
               "name": {
                 "minLength": 1,
                 "type": "string"
-              },
-              "partnerOnly": {
-                "type": "boolean"
               }
             },
             "required": [
               "name",
-              "description",
-              "partnerOnly"
+              "description"
             ],
             "type": "object"
           },
@@ -1041,7 +1033,6 @@
         "handWritten",
         "tokenPath",
         "introspectionPath",
-        "authorizeUrl",
         "scopes"
       ],
       "type": "object"

@@ -22,8 +22,9 @@ const (
 	versionPath = "../../../OPENAPI_VERSION"
 )
 
-// expectedCommands is the command for every Developer API operation: the
-// SDK method table of research `api-sdk-surface.md` §11 with the renames
+// expectedCommands is the command for every Developer API operation, taken
+// from the Developer API reference (the vendored openapi/openapi.developer.json)
+// and written down independently of the generator, with the renames
 // settled since (grilling Q12 `retrieveLinks`; the IR's `auth.introspect`
 // and `delete`) and the Q25 splits, in tmh's kebab-case.
 var expectedCommands = []struct {
@@ -68,18 +69,6 @@ var expectedCommands = []struct {
 	{"listMembers", "members.list", "members list"},
 	{"getMember", "members.retrieve", "members retrieve"},
 	{"getOperation", "operations.retrieve", "operations retrieve"},
-	{"createPartnerOrganization", "partners.organizations.create", "partners organizations create"},
-	{"listPartnerOrganizations", "partners.organizations.list", "partners organizations list"},
-	{"getPartner", "partners.retrieve", "partners retrieve"},
-	{"confirmPaymentMethod", "paymentMethod.confirm", "payment-method confirm"},
-	{"removePaymentMethod", "paymentMethod.delete", "payment-method delete"},
-	{"preparePaymentMethod", "paymentMethod.prepare", "payment-method prepare"},
-	{"getPaymentMethod", "paymentMethod.retrieve", "payment-method retrieve"},
-	{"setupPaymentMethod", "paymentMethod.setup", "payment-method setup"},
-	{"createSeatOrder", "seatOrders.create", "seat-orders create"},
-	{"listSeatOrders", "seatOrders.list", "seat-orders list"},
-	{"quoteSeatOrder", "seatOrders.quote", "seat-orders quote"},
-	{"getSeatOrder", "seatOrders.retrieve", "seat-orders retrieve"},
 	{"getSeatInventory", "seats.retrieve", "seats retrieve"},
 	{"createWebhookSubscription", "webhookSubscriptions.create", "webhook-subscriptions create"},
 	{"deleteWebhookSubscription", "webhookSubscriptions.delete", "webhook-subscriptions delete"},

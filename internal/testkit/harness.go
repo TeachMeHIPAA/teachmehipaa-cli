@@ -3,6 +3,7 @@ package testkit
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -57,9 +58,6 @@ type Env struct {
 	NoBrowser bool
 	// BrowserErr makes opening a URL fail.
 	BrowserErr error
-	// Browser, when set, acts as the person's browser for each opened URL,
-	// such as following a consent redirect to tmh's loopback server.
-	Browser func(url string) error
 	// Build is the tmh build under test.
 	Build version.Info
 	// ForwardTransport carries `--forward-to` requests, normally to an
@@ -87,8 +85,11 @@ func NewEnv(t testing.TB) *Env {
 
 // Result is what a command printed and how it exited.
 type Result struct {
-	Stdout   string
-	Stderr   string
+	Stdout string
+	Stderr string
+	// Combined is stdout and stderr in the order they were written, as a
+	// terminal shows them.
+	Combined string
 	ExitCode int
 }
 
@@ -100,7 +101,7 @@ func (e *Env) Run(args ...string) Result {
 // RunContext executes `tmh <args>` until it ends or ctx is cancelled, as
 // Ctrl-C does.
 func (e *Env) RunContext(ctx context.Context, args ...string) Result {
-	var stdout, stderr bytes.Buffer
+	var stdout, stderr, combined bytes.Buffer
 	code := commands.Execute(ctx, cmdutil.Deps{
 		Transport:            e.Transport,
 		ForwardTransport:     e.ForwardTransport,
@@ -108,8 +109,8 @@ func (e *Env) RunContext(ctx context.Context, args ...string) Result {
 		Keyring:              e.Keyring,
 		Clock:                e.Clock,
 		Stdin:                strings.NewReader(e.Stdin),
-		Stdout:               &stdout,
-		Stderr:               &stderr,
+		Stdout:               io.MultiWriter(&stdout, &combined),
+		Stderr:               io.MultiWriter(&stderr, &combined),
 		LookupEnv:            e.lookup,
 		StdinIsTTY:           e.StdinIsTTY,
 		StdoutIsTTY:          e.StdoutIsTTY,
@@ -118,7 +119,7 @@ func (e *Env) RunContext(ctx context.Context, args ...string) Result {
 		OpenBrowser:          e.openBrowser(),
 		Build:                e.Build,
 	}, args)
-	return Result{Stdout: stdout.String(), Stderr: stderr.String(), ExitCode: code}
+	return Result{Stdout: stdout.String(), Stderr: stderr.String(), Combined: combined.String(), ExitCode: code}
 }
 
 func (e *Env) openBrowser() func(string) error {
@@ -127,13 +128,7 @@ func (e *Env) openBrowser() func(string) error {
 	}
 	return func(url string) error {
 		e.Opened = append(e.Opened, url)
-		if e.BrowserErr != nil {
-			return e.BrowserErr
-		}
-		if e.Browser != nil {
-			return e.Browser(url)
-		}
-		return nil
+		return e.BrowserErr
 	}
 }
 

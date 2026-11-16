@@ -21,9 +21,6 @@ type Credentials struct {
 	ClientID       string
 	ClientSecret   string
 	OrganizationID string
-	// PartnerApp means the id and secret are a Partner app's, and the
-	// profile holds a Grant's Refresh token, read only under LockGrant.
-	PartnerApp bool
 }
 
 // ErrNotLoggedIn means the profile has no stored credentials.
@@ -45,22 +42,21 @@ type fileConfig struct {
 	LocalSigningSecrets map[string]string `toml:"local_signing_secrets,omitempty"`
 }
 
+// fileProfile ignores keys it doesn't know, so a config.toml written by
+// another tmh version still loads.
 type fileProfile struct {
 	ClientID       string `toml:"client_id"`
 	OrganizationID string `toml:"organization_id,omitempty"`
-	PartnerApp     bool   `toml:"partner_app,omitempty"`
 	ClientSecret   string `toml:"client_secret,omitempty"`
-	RefreshToken   string `toml:"refresh_token,omitempty"`
 }
 
-// errNoGrant means another tmh process logged the profile out, or into
-// something else, since this one read it.
-func errNoGrant(profile string) error {
-	return fmt.Errorf("%w: the %s profile no longer holds a Grant", ErrNotLoggedIn, profile)
+// removeOldRefreshToken drops the keyring entry an older tmh kept for a
+// partner-login profile's Refresh token, which nothing reads any more. The
+// result is ignored: the entry is usually absent, an unusable keyring holds
+// nothing to remove, and neither should fail a login or logout.
+func (s Store) removeOldRefreshToken(profile string) {
+	_ = s.Keyring.Delete(keyringService, profile+":refresh-token")
 }
-
-// refreshTokenUser is the keyring entry for a profile's Grant.
-func refreshTokenUser(profile string) string { return profile + ":refresh-token" }
 
 // Path is config.toml's location.
 func (s Store) Path() string { return filepath.Join(s.Dir, "config.toml") }
@@ -78,30 +74,7 @@ func (s Store) Save(profile string, credentials Credentials) (inFile bool, err e
 		inFile = true
 	}
 	config.Profiles[profile] = entry
-	// A Grant this profile held before is replaced, and a stale Refresh
-	// token must not outlive it.
-	_ = s.Keyring.Delete(keyringService, refreshTokenUser(profile))
-	return inFile, s.write(config)
-}
-
-// SaveGrant stores a Partner app's credentials and its Grant's first
-// Refresh token for the profile. It reports whether a secret went to the
-// config file because the keyring was unusable.
-func (s Store) SaveGrant(profile string, credentials Credentials, refreshToken string) (inFile bool, err error) {
-	config, err := s.read()
-	if err != nil {
-		return false, err
-	}
-	entry := fileProfile{ClientID: credentials.ClientID, OrganizationID: credentials.OrganizationID, PartnerApp: true}
-	if s.Keyring.Set(keyringService, profile, credentials.ClientSecret) != nil {
-		entry.ClientSecret = credentials.ClientSecret
-		inFile = true
-	}
-	if s.Keyring.Set(keyringService, refreshTokenUser(profile), refreshToken) != nil {
-		entry.RefreshToken = refreshToken
-		inFile = true
-	}
-	config.Profiles[profile] = entry
+	s.removeOldRefreshToken(profile)
 	return inFile, s.write(config)
 }
 
@@ -121,54 +94,6 @@ func (s Store) SetOrganizationID(profile, organizationID string) error {
 	return s.write(config)
 }
 
-// RefreshToken is the profile's current Grant Refresh token. Read it while
-// holding LockGrant, since another tmh process may have just rotated it.
-func (s Store) RefreshToken(profile string) (string, error) {
-	config, err := s.read()
-	if err != nil {
-		return "", err
-	}
-	entry, ok := config.Profiles[profile]
-	if !ok || !entry.PartnerApp {
-		return "", errNoGrant(profile)
-	}
-	// The file copy wins: it exists only when the keyring refused the
-	// latest token, so a keyring copy would be older.
-	if entry.RefreshToken != "" {
-		return entry.RefreshToken, nil
-	}
-	token, err := s.Keyring.Get(keyringService, refreshTokenUser(profile))
-	if err != nil {
-		return "", fmt.Errorf("%w: the %s profile's Refresh token is missing from the OS keyring (%v)",
-			ErrNotLoggedIn, profile, err)
-	}
-	return token, nil
-}
-
-// SaveRefreshToken replaces the profile's Grant Refresh token with the one
-// an exchange returned. An error means the store still holds the superseded
-// token.
-func (s Store) SaveRefreshToken(profile, token string) error {
-	config, err := s.read()
-	if err != nil {
-		return err
-	}
-	entry, ok := config.Profiles[profile]
-	if !ok || !entry.PartnerApp {
-		return errNoGrant(profile)
-	}
-	if s.Keyring.Set(keyringService, refreshTokenUser(profile), token) == nil {
-		if entry.RefreshToken == "" {
-			return nil
-		}
-		entry.RefreshToken = ""
-	} else {
-		entry.RefreshToken = token
-	}
-	config.Profiles[profile] = entry
-	return s.write(config)
-}
-
 // Load returns the profile's credentials, or an error wrapping
 // ErrNotLoggedIn when it has none or its secret is gone from the keyring.
 func (s Store) Load(profile string) (Credentials, error) {
@@ -184,7 +109,6 @@ func (s Store) Load(profile string) (Credentials, error) {
 		ClientID:       entry.ClientID,
 		ClientSecret:   entry.ClientSecret,
 		OrganizationID: entry.OrganizationID,
-		PartnerApp:     entry.PartnerApp,
 	}
 	if credentials.ClientSecret != "" {
 		return credentials, nil
@@ -205,7 +129,7 @@ func (s Store) Delete(profile string) (bool, error) {
 		return false, err
 	}
 	keyringErr := s.Keyring.Delete(keyringService, profile)
-	_ = s.Keyring.Delete(keyringService, refreshTokenUser(profile))
+	s.removeOldRefreshToken(profile)
 	_, inFile := config.Profiles[profile]
 	if !inFile {
 		return keyringErr == nil, nil
@@ -260,9 +184,7 @@ func (s Store) write(config fileConfig) error {
 }
 
 // writeTOML replaces path atomically and durably; CreateTemp makes it 0600,
-// so a secret is never readable by others, even briefly. A rotated Refresh
-// token must survive a crash once the exchange returns (ADR-0004): the
-// superseded one left behind would revoke the Grant when presented.
+// so a secret is never readable by others, even briefly.
 func writeTOML(dir, path string, value any) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
