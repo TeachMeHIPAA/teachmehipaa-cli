@@ -11,12 +11,9 @@ import (
 )
 
 const (
-	sandboxBase       = "https://api-teachmehipaa-dev.web.app/v1"
-	partnerID         = "ptn_01JD83GH4J5K6M7N8P9Q0R1S2T"
-	seatOrdersRoute   = "POST /v1/organizations/" + testkit.OrgID + "/seat-orders"
-	learnersRoute     = "POST /v1/organizations/" + testkit.OrgID + "/learners"
-	batchRoute        = "POST /v1/organizations/" + testkit.OrgID + "/enrollments:batch"
-	paymentMethodPath = "/v1/organizations/" + testkit.OrgID + "/billing/payment-method"
+	sandboxBase   = "https://api-teachmehipaa-dev.web.app/v1"
+	learnersRoute = "POST /v1/organizations/" + testkit.OrgID + "/learners"
+	batchRoute    = "POST /v1/organizations/" + testkit.OrgID + "/enrollments:batch"
 )
 
 func TestAListCommandTakesQueryParametersAsFlags(t *testing.T) {
@@ -37,25 +34,26 @@ func TestAListCommandTakesQueryParametersAsFlags(t *testing.T) {
 	}
 }
 
-func TestBodyFieldsAreFlagsAndNestedFieldsAreDotted(t *testing.T) {
+func TestBodyFieldsAreTypedFlags(t *testing.T) {
 	env := loggedInByEnvironment(t)
-	env.Transport.Script(seatOrdersRoute, testkit.Reply{Status: 201, Body: `{"seatOrderId":"so_1"}`})
+	env.Transport.Script(webhookSubscriptionsRoute, testkit.Reply{Status: 201, Body: `{"subscriptionId":"` + testkit.SubscriptionID + `"}`})
 
-	result := env.Run("seat-orders", "create", "--quantity", "5",
-		"--payment.method", "invoice", "--payment.days-until-due", "30", "--client-reference", "po-1")
+	result := env.Run("webhook-subscriptions", "create", "--endpoint-url", "https://hooks.example.com/tmh",
+		"--event-types", "learner.certified,learner.expired", "--seats-low-threshold", "3")
 
 	if result.ExitCode != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", result.ExitCode, result.Stderr)
 	}
 	request := env.Transport.Requests()[2]
-	if want := `{"clientReference":"po-1","payment":{"daysUntilDue":30,"method":"invoice"},"quantity":5}`; request.Body != want {
+	want := `{"endpointUrl":"https://hooks.example.com/tmh","eventTypes":["learner.certified","learner.expired"],"seatsLowThreshold":3}`
+	if request.Body != want {
 		t.Errorf("body = %s\nwant   %s", request.Body, want)
 	}
 	assertHeader(t, request, "Content-Type", "application/json")
 	if !uuidV4.MatchString(request.Header.Get("Idempotency-Key")) {
 		t.Errorf("Idempotency-Key = %q, want a generated UUIDv4", request.Header.Get("Idempotency-Key"))
 	}
-	if want := `{"seatOrderId":"so_1"}` + "\n"; result.Stdout != want {
+	if want := `{"subscriptionId":"` + testkit.SubscriptionID + `"}` + "\n"; result.Stdout != want {
 		t.Errorf("stdout = %q, want %q", result.Stdout, want)
 	}
 }
@@ -138,27 +136,23 @@ func TestAnUpdateWithoutIfMatchIsAUsageError(t *testing.T) {
 	}
 }
 
-func TestAPartnerCommandTakesThePartnerIDAndSkipsIntrospection(t *testing.T) {
+func TestACommandWithoutAnOrganizationSkipsIntrospectionWhenLoggedIn(t *testing.T) {
 	env := testkit.NewEnv(t)
 	env.Vars["TMH_CLIENT_ID"] = testkit.ClientID
 	env.Vars["TMH_CLIENT_SECRET"] = testkit.ClientSecret
-	route := "POST /v1/partners/" + partnerID + "/organizations"
-	env.Transport.
-		Script(testkit.TokenRoute, testkit.TokenReply("jwt-1", 900)).
-		Script(route, testkit.Reply{Status: 201, Body: `{}`})
+	route := "GET /v1/certificate-verifications/tme_7Qx2"
+	env.Transport.Script(route, testkit.JSON(`{"valid":true}`))
 
-	result := env.Run("partners", "organizations", "create", partnerID, "--name", "Main Street Clinic",
-		"--admin-email", "admin@example.com", "--scopes", "learners:read,learners:write")
+	result := env.Run("certificate-verifications", "retrieve", "tme_7Qx2")
 
 	if result.ExitCode != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", result.ExitCode, result.Stderr)
 	}
-	if routes := env.Transport.Routes(); !slices.Equal(routes, []string{testkit.TokenRoute, route}) {
-		t.Fatalf("routes = %v, want the token then the partner organization", routes)
+	if routes := env.Transport.Routes(); !slices.Equal(routes, []string{route}) {
+		t.Fatalf("routes = %v, want only the verification", routes)
 	}
-	want := `{"adminEmail":"admin@example.com","name":"Main Street Clinic","scopes":["learners:read","learners:write"]}`
-	if got := env.Transport.Requests()[1].Body; got != want {
-		t.Errorf("body = %s\nwant   %s", got, want)
+	if want := `{"valid":true}` + "\n"; result.Stdout != want {
+		t.Errorf("stdout = %q, want %q", result.Stdout, want)
 	}
 }
 
@@ -182,9 +176,9 @@ func TestAPublicCommandSendsNoAuthorizationAndNeedsNoLogin(t *testing.T) {
 
 func TestADeleteAnsweredWith204PrintsNothingAndSucceeds(t *testing.T) {
 	env := loggedInByEnvironment(t)
-	env.Transport.Script("DELETE "+paymentMethodPath, testkit.Reply{Status: 204})
+	env.Transport.Script(testkit.DeleteWebhookSubscriptionRoute, testkit.Reply{Status: 204})
 
-	result := env.Run("payment-method", "delete")
+	result := env.Run("webhook-subscriptions", "delete", testkit.SubscriptionID)
 
 	if result.ExitCode != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", result.ExitCode, result.Stderr)

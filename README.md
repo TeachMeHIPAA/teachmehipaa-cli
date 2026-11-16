@@ -152,8 +152,8 @@ tmh webhook-subscriptions test whs_01JD8W
 
 The resources are `audit-events`, `auth`, `certificate-verifications`,
 `certificates`, `compliance`, `courses`, `enrollments`, `events`, `learners`,
-`members`, `operations`, `partners`, `payment-method`, `seat-orders`, `seats`
-and `webhook-subscriptions` (also spelled `webhooks`). `tmh <resource> --help`
+`members`, `operations`, `seats` and `webhook-subscriptions` (also spelled
+`webhooks`). `tmh <resource> --help`
 lists the methods, and `tmh <resource> <method> --help` shows the API's own
 description of the operation, its Scopes and its flags.
 

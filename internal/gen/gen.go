@@ -648,7 +648,7 @@ func firstNonEmpty(value *string, fallback string) string {
 	return fallback
 }
 
-// humanize spells an IR name as words: "seatOrders" is "Seat orders".
+// humanize spells an IR name as words: "webhookSubscriptions" is "Webhook subscriptions".
 func humanize(name string) string {
 	words := strings.ReplaceAll(kebab(name), "-", " ")
 	runes := []rune(words)

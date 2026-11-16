@@ -209,8 +209,8 @@ func stringSlice(values []string) string {
 	return "[]string{" + strings.Join(quoted, ", ") + "}"
 }
 
-// variable names a resource's method list: partners.organizations is
-// partnersOrganizationsMethods.
+// variable names a resource's method list, camel-casing a nested path:
+// webhookSubscriptions is webhookSubscriptionsMethods.
 func variable(path []string) string {
 	name := path[0]
 	for _, part := range path[1:] {

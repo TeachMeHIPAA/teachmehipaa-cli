@@ -19,7 +19,7 @@ var eventsMethods = []resource.Method{
 		Query: []resource.Flag{
 			{Name: "limit", Path: []string{"limit"}, Type: resource.Int, Usage: "How many objects to return, between 1 and 100. Defaults to 20."},
 			{Name: "after", Path: []string{"after"}, Type: resource.String, Usage: "Return events after this event id (exclusive). The previous page's `nextCursor`."},
-			{Name: "type", Path: []string{"type"}, Type: resource.String, Usage: "Filter to one event type; one of: enrollment.certified, seat.consumed, seat.freed, learner.invited, learner.started, learner.certified, learner.expiring, learner.expired, learner.removed, invite.bounced, certificate.revoked, seats.low, seat_order.paid, seat_order.failed, seat_order.expired", Values: []string{"enrollment.certified", "seat.consumed", "seat.freed", "learner.invited", "learner.started", "learner.certified", "learner.expiring", "learner.expired", "learner.removed", "invite.bounced", "certificate.revoked", "seats.low", "seat_order.paid", "seat_order.failed", "seat_order.expired"}},
+			{Name: "type", Path: []string{"type"}, Type: resource.String, Usage: "Filter to one event type; one of: enrollment.certified, seat.consumed, seat.freed, learner.invited, learner.started, learner.certified, learner.expiring, learner.expired, learner.removed, invite.bounced, certificate.revoked, seats.low", Values: []string{"enrollment.certified", "seat.consumed", "seat.freed", "learner.invited", "learner.started", "learner.certified", "learner.expiring", "learner.expired", "learner.removed", "invite.bounced", "certificate.revoked", "seats.low"}},
 		},
 		Pagination: &resource.Pagination{Param: "after", ItemID: "eventId"},
 	},
