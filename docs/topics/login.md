@@ -55,7 +55,7 @@ stays.
 
 | Profile | Environment | Base URL |
 |---|---|---|
-| `sandbox` (default) | Sandbox | `https://api-teachmehipaa-dev.web.app/v1` |
+| `sandbox` (default) | Sandbox | `https://sandbox.api.tme.so/v1` |
 | `live` | Live | `https://api.tme.so/v1` |
 
 Credentials belong to one Environment, so each profile has its own login.

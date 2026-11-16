@@ -64,7 +64,7 @@ func TestLearnersRetrieveSendsTheCourse(t *testing.T) {
 		t.Fatalf("exit code = %d, stderr = %q", result.ExitCode, result.Stderr)
 	}
 	learner := env.Transport.Requests()[2]
-	want := "https://api-teachmehipaa-dev.web.app/v1/organizations/org_acme/learners/" + testkit.LearnerID + "?courseId=hipaa+2026"
+	want := "https://sandbox.api.tme.so/v1/organizations/org_acme/learners/" + testkit.LearnerID + "?courseId=hipaa+2026"
 	if learner.URL != want {
 		t.Errorf("learner URL = %s, want %s", learner.URL, want)
 	}

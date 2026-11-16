@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	sandboxBase   = "https://api-teachmehipaa-dev.web.app/v1"
+	sandboxBase   = "https://sandbox.api.tme.so/v1"
 	learnersRoute = "POST /v1/organizations/" + testkit.OrgID + "/learners"
 	batchRoute    = "POST /v1/organizations/" + testkit.OrgID + "/enrollments:batch"
 )

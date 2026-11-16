@@ -178,7 +178,7 @@ var sessions = map[string]func(s *docSession){
 	"usage-error": func(*docSession) {},
 	"connection-error": func(s *docSession) {
 		s.loggedIn("test")
-		down := testkit.Reply{Err: errors.New("dial tcp: lookup api-teachmehipaa-dev.web.app: no such host")}
+		down := testkit.Reply{Err: errors.New("dial tcp: lookup sandbox.api.tme.so: no such host")}
 		s.env.Transport.Script("GET "+orgPath+"/compliance", down, down, down)
 	},
 }

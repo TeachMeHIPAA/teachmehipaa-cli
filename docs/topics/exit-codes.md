@@ -56,7 +56,7 @@ An unreachable API fails after the retries:
 <!-- doctest: connection-error -->
 ```console
 $ tmh compliance retrieve
-Error: could not reach the TeachMeHIPAA API: Get "https://api-teachmehipaa-dev.web.app/v1/organizations/org_acme/compliance": dial tcp: lookup api-teachmehipaa-dev.web.app: no such host
+Error: could not reach the TeachMeHIPAA API: Get "https://sandbox.api.tme.so/v1/organizations/org_acme/compliance": dial tcp: lookup sandbox.api.tme.so: no such host
 $ echo $?
 7
 ```

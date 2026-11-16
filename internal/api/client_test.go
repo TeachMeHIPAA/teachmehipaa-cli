@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	baseURL      = "https://api-teachmehipaa-dev.web.app/v1"
+	baseURL      = "https://sandbox.api.tme.so/v1"
 	learnersPath = "/organizations/" + testkit.OrgID + "/learners"
 )
 

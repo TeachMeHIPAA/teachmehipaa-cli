@@ -17,8 +17,8 @@ func TestProfilesSelectTheEnvironment(t *testing.T) {
 		wantHost string
 		wantAuth string
 	}{
-		{name: "sandbox by default", flags: nil, wantHost: "https://api-teachmehipaa-dev.web.app/v1/", wantAuth: testkit.ClientSecret},
-		{name: "--profile sandbox", flags: []string{"--profile", "sandbox"}, wantHost: "https://api-teachmehipaa-dev.web.app/v1/", wantAuth: testkit.ClientSecret},
+		{name: "sandbox by default", flags: nil, wantHost: "https://sandbox.api.tme.so/v1/", wantAuth: testkit.ClientSecret},
+		{name: "--profile sandbox", flags: []string{"--profile", "sandbox"}, wantHost: "https://sandbox.api.tme.so/v1/", wantAuth: testkit.ClientSecret},
 		{name: "--live", flags: []string{"--live"}, wantHost: "https://api.tme.so/v1/", wantAuth: liveSecret},
 		{name: "--profile live", flags: []string{"--profile", "live"}, wantHost: "https://api.tme.so/v1/", wantAuth: liveSecret},
 		{name: "--live --profile live", flags: []string{"--live", "--profile", "live"}, wantHost: "https://api.tme.so/v1/", wantAuth: liveSecret},

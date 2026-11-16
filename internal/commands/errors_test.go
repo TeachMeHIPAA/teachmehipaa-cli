@@ -66,7 +66,7 @@ func TestNoResponseIsAConnectionFailure(t *testing.T) {
 	if result.ExitCode != 7 {
 		t.Errorf("exit code = %d, want 7", result.ExitCode)
 	}
-	want := `Error: could not reach the TeachMeHIPAA API: Get "https://api-teachmehipaa-dev.web.app/v1/organizations/org_acme/learners/` +
+	want := `Error: could not reach the TeachMeHIPAA API: Get "https://sandbox.api.tme.so/v1/organizations/org_acme/learners/` +
 		testkit.LearnerID + `": connection refused` + "\n"
 	if result.Stderr != want {
 		t.Errorf("stderr = %q, want %q", result.Stderr, want)

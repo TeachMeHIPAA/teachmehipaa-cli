@@ -13,7 +13,7 @@ type Profile struct {
 // The two profiles, one per Environment.
 var (
 	// Sandbox is for testing; it is the default.
-	Sandbox = Profile{Name: "sandbox", Environment: "Sandbox", BaseURL: "https://api-teachmehipaa-dev.web.app/v1"}
+	Sandbox = Profile{Name: "sandbox", Environment: "Sandbox", BaseURL: "https://sandbox.api.tme.so/v1"}
 	// Live is production.
 	Live = Profile{Name: "live", Environment: "Live", BaseURL: "https://api.tme.so/v1"}
 )

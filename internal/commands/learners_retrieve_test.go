@@ -30,7 +30,7 @@ func TestLearnersRetrieveWithEnvironmentCredentials(t *testing.T) {
 	}
 	token, introspection, learner := requests[0], requests[1], requests[2]
 
-	if token.URL != "https://api-teachmehipaa-dev.web.app/v1/auth/token" {
+	if token.URL != "https://sandbox.api.tme.so/v1/auth/token" {
 		t.Errorf("token URL = %s", token.URL)
 	}
 	basic := "Basic " + base64.StdEncoding.EncodeToString([]byte(testkit.ClientID+":"+testkit.ClientSecret))
@@ -40,12 +40,12 @@ func TestLearnersRetrieveWithEnvironmentCredentials(t *testing.T) {
 		t.Errorf("token body = %q", token.Body)
 	}
 
-	if introspection.URL != "https://api-teachmehipaa-dev.web.app/v1/auth/introspection" {
+	if introspection.URL != "https://sandbox.api.tme.so/v1/auth/introspection" {
 		t.Errorf("introspection URL = %s", introspection.URL)
 	}
 	assertHeader(t, introspection, "Authorization", "Bearer jwt-1")
 
-	if learner.URL != "https://api-teachmehipaa-dev.web.app/v1/organizations/org_acme/learners/"+testkit.LearnerID {
+	if learner.URL != "https://sandbox.api.tme.so/v1/organizations/org_acme/learners/"+testkit.LearnerID {
 		t.Errorf("learner URL = %s", learner.URL)
 	}
 	assertHeader(t, learner, "Authorization", "Bearer jwt-1")

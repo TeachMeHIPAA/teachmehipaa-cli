@@ -238,7 +238,7 @@ func TestTmhTalksOnlyToTheAPIAndTheReleaseCheck(t *testing.T) {
 	}
 
 	for _, r := range env.Transport.Requests() {
-		if host := strings.SplitN(strings.TrimPrefix(r.URL, "https://"), "/", 2)[0]; host != "api-teachmehipaa-dev.web.app" {
+		if host := strings.SplitN(strings.TrimPrefix(r.URL, "https://"), "/", 2)[0]; host != "sandbox.api.tme.so" {
 			t.Errorf("API transport carried %s, want only the API", r.URL)
 		}
 	}

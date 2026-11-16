@@ -8,7 +8,7 @@ tmh <resource> <method> [<id>...] [flags]
 
 One section per Developer API operation: 45 commands over 13 resources, generated from API release `trimmed-2026-11-15`. Under each command, a table gives the HTTP route, the Scopes it needs, what it prints and whether `tmh` retries it, followed by an example. The [command reference](commands/tmh.md) has every flag with its default, and [Requests](../topics/requests.md) shows how arguments, flags and `-d` turn into a request.
 
-Routes are relative to the Environment's base URL: `https://api.tme.so/v1` for Live, `https://api-teachmehipaa-dev.web.app/v1` for Sandbox. `{orgId}` never appears on the command line; `tmh` reads it from your credentials. `tmh events tail`, `tmh events resend` and the raw `tmh get`, `post`, `put`, `patch` and `delete` belong to `tmh` itself and call no single operation, so they have no section here.
+Routes are relative to the Environment's base URL: `https://api.tme.so/v1` for Live, `https://sandbox.api.tme.so/v1` for Sandbox. `{orgId}` never appears on the command line; `tmh` reads it from your credentials. `tmh events tail`, `tmh events resend` and the raw `tmh get`, `post`, `put`, `patch` and `delete` belong to `tmh` itself and call no single operation, so they have no section here.
 
 ## Contents
 
