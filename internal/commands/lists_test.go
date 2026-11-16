@@ -12,7 +12,7 @@ import (
 const eventsListRoute = "GET /v1/organizations/" + testkit.OrgID + "/events"
 
 // Three Learners across three pages; the second is a short page, which the
-// API returns when a filter applies per page (api-sdk-surface.md §4).
+// API returns when a filter applies per page.
 var learnerPages = []testkit.Reply{
 	testkit.JSON(`{"items":[{"learnerId":"sub_1"},{"learnerId":"sub_2"}],"nextCursor":"c2"}`),
 	testkit.JSON(`{"items":[],"nextCursor":"c3"}`),

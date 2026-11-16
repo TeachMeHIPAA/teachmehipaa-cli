@@ -30,7 +30,7 @@ func RootCommands() []string { return slices.Clone(rootCommands) }
 
 // afterItemID is the item field an `after`-style list resumes from. The IR
 // names only the parameter; the event log is the one such list, and its
-// `after` is the last Event's id (api-sdk-surface.md §4).
+// `after` is the last Event's id.
 const afterItemID = "eventId"
 
 // binaryAcceptSuffix also names problem+json, so a failed download still explains

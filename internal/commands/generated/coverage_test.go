@@ -22,8 +22,9 @@ const (
 	versionPath = "../../../OPENAPI_VERSION"
 )
 
-// expectedCommands is the command for every Developer API operation: the
-// SDK method table of research `api-sdk-surface.md` §11 with the renames
+// expectedCommands is the command for every Developer API operation, taken
+// from the Developer API reference (the vendored openapi/openapi.developer.json)
+// and written down independently of the generator, with the renames
 // settled since (grilling Q12 `retrieveLinks`; the IR's `auth.introspect`
 // and `delete`) and the Q25 splits, in tmh's kebab-case.
 var expectedCommands = []struct {

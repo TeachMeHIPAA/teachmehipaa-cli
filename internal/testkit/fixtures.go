@@ -2,7 +2,8 @@ package testkit
 
 import "fmt"
 
-// Fixture values follow the developer OpenAPI examples (api-sdk-surface.md §2).
+// Fixture values follow the developer OpenAPI examples in
+// openapi/openapi.developer.json.
 const (
 	ClientID     = "cli_01JD7Z3M1V4Q8T2K5N9R6W0XYZ"
 	ClientSecret = "tmh_cs_c2VjcmV0LXNlY3JldC1zZWNyZXQtc2VjcmV0LXM"
