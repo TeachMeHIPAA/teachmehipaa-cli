@@ -1,110 +1,110 @@
-# tmh: the TeachMeHIPAA CLI
+# tmh
 
-Work with the TeachMeHIPAA Developer API from your terminal.
+`tmh` is the command-line client for the TeachMeHIPAA Developer API. One
+static binary covers Learners, Enrollments, Certificates, exports and webhook
+Events, from an interactive shell or a CI job.
 
 [![CI](https://github.com/TeachMeHIPAA/teachmehipaa-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/TeachMeHIPAA/teachmehipaa-cli/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> [!IMPORTANT]
-> **Status: pre-release.** The TeachMeHIPAA Developer API isn't generally
-> available yet, and `tmh` has no published release: Homebrew, Scoop, the
-> Linux packages and the Docker image don't exist until the first one. Until
-> then, install it from source as shown below. Commands and output may still
-> change before 1.0.
-
-`tmh` lets you explore the API, script admin tasks such as roster syncs and
-Certificate exports, and test your webhook handler against real Events
-without a public URL. It is a single static binary with no runtime
-dependencies, and it handles Access tokens, the Organization binding,
-retries, idempotency keys, pagination and Operations for you.
+> [!WARNING]
+> **Pre-release.** The Developer API is not generally available, and `tmh`
+> has no tagged release. Homebrew, Scoop, deb, rpm and the Docker image
+> arrive with 1.0. Until then, build from source with the commands below.
+> Commands, flags and output can change before 1.0.
 
 ## Install
-
-With Go 1.24 or newer, install the latest source from GitHub:
 
 <!-- doctest: illustrative -->
 ```sh
 go install github.com/TeachMeHIPAA/teachmehipaa-cli/cmd/tmh@main
 ```
 
-Or build it from a checkout, which puts the binary in `bin/tmh`:
+Needs Go 1.24 or newer. The binary lands in `$(go env GOPATH)/bin`. To build
+from a checkout instead:
 
 <!-- doctest: illustrative -->
 ```sh
 git clone https://github.com/TeachMeHIPAA/teachmehipaa-cli.git
-cd teachmehipaa-cli
-make build
+cd teachmehipaa-cli && make build    # writes bin/tmh
 ```
 
-A build from source reports its version as `dev`. After the first release,
-`tmh` will also install with Homebrew, Scoop, deb and rpm packages, Docker
-and release archives; [Getting started](docs/guides/getting-started.md#install)
-lists them.
+A source build reports its version as `dev`. [Install](docs/topics/install.md)
+lists the release channels, checksum verification, Docker and shell
+completion.
 
-## Quickstart
+## Log in
 
-Create an API client in the Sandbox Environment of the TeachMeHIPAA console
-to get a client id (`cli_…`) and secret (`tmh_cs_…`), then put them in the
-environment. Sandbox Learners are never emailed, so you can experiment
-freely.
+<!-- doctest: illustrative -->
+```console
+$ tmh login
+Client ID: cli_01JD7Z3M1V4Q8T2K5N9R6W0XYZ
+Client secret:
+Logged in to Sandbox as Organization org_acme.
+```
+
+The client id (`cli_…`) and secret (`tmh_cs_…`) belong to an API client
+that an Organization admin creates in the console (`tmh open console`).
+`tmh login` stores the secret in the OS keyring. Every command runs against
+the `sandbox` profile unless you pass `--live`, and Sandbox Learners never
+receive email.
+
+## First command
 
 <!-- doctest: readme-quickstart -->
 ```console
-$ export TMH_CLIENT_ID=cli_01JD7Z3M1V4Q8T2K5N9R6W0XYZ
-$ export TMH_CLIENT_SECRET=tmh_cs_...
 $ tmh whoami
 Organization  org_acme
 Scopes        learners:read, learners:write
 Environment   Sandbox
-$ tmh learners list --status in_progress --limit 1
+$ tmh compliance retrieve
 {
-  "items": [
-    {
-      "learnerId": "sub_01JD80AB2C3D4E5F6G7H8J9K0M",
-      "email": "ana@example.com",
-      "name": "Ana Example",
-      "externalId": "hr-123",
-      "status": "in_progress",
-      "course": {
-        "courseId": "hipaa-2026",
-        "title": "HIPAA Training 2026"
-      },
-      "invitedAt": "2026-11-01T09:00:00.000Z",
-      "startedAt": "2026-11-02T10:30:00.000Z",
-      "completedAt": null,
-      "dueAt": "2026-12-01T00:00:00.000Z",
-      "certificate": null
-    }
-  ],
-  "nextCursor": "eyJvZmZzZXQiOjF9"
+  "asOf": "2026-11-15T12:00:00.000Z",
+  "courseId": "hipaa-2026",
+  "totals": {
+    "learners": 42,
+    "compliant": 30,
+    "expiringSoon": 3,
+    "expired": 1,
+    "inProgress": 5,
+    "notStarted": 2,
+    "inviteBounced": 1
+  },
+  "compliantRate": 0.714
 }
 ```
 
-`tmh login` stores credentials in your OS keyring instead, so you don't need
-the variables. Every API operation is a `tmh <resource> <method>` command;
-`tmh <resource> --help` lists them. Output is JSON on stdout, so `tmh … | jq`
-works, and each failure class has its own [exit code](#exit-codes).
+`tmh` fetched an Access token, asked the API which Organization the
+credentials belong to, and put that Organization in the request path. You
+never pass an Organization id or a token.
 
-## Documentation
+## Usage
 
-| Guide | What it covers |
+<!-- doctest: synopsis -->
+```text
+tmh learners list [--status <status>] [--all [--ndjson]]
+tmh learners retrieve <learnerId>
+tmh learners create --email <email> [--name <name>] [-d <key>=<value>]
+tmh certificates export --format csv -o <file>
+tmh events tail [--forward-to <url>]
+tmh get <path> [--query <key>=<value>]
+```
+
+Every API operation is `tmh <resource> <method>`. Path ids are positional
+arguments; query parameters and body fields are flags. `tmh <resource>
+--help` lists the methods. Responses print as JSON on stdout; errors, notices
+and `--verbose` lines go to stderr.
+
+| Global flag | Effect |
 |---|---|
-| [Getting started](docs/guides/getting-started.md) | Install, credentials, first calls, inviting a Learner |
-| [Authentication and profiles](docs/guides/authentication-and-profiles.md) | `tmh login`, the `sandbox` and `live` profiles, CI credentials, Scopes, public lookups |
-| [Commands](docs/guides/commands.md) | Arguments, flags, `-d` and `--data`, ETags and `--if-match`, idempotency, retries, raw requests |
-| [Output and scripting](docs/guides/output-and-scripting.md) | JSON output, `jq`, pagination with `--all` and `--ndjson`, `--verbose` |
-| [Webhooks and `events tail`](docs/guides/webhooks-and-events-tail.md) | The Event log, forwarding Events to a local handler, the local signature, Test deliveries |
-| [Operations and files](docs/guides/operations-and-files.md) | `--wait`, CSV exports, Certificate PDFs, CSV imports |
-| [Exit codes and errors](docs/guides/exit-codes.md) | Every exit code, how errors print, request ids |
-| [Configuration and privacy](docs/guides/configuration-and-privacy.md) | Environment variables, config and state files, the version check, shell completion |
+| `--live` | Use the `live` profile, the same as `--profile live`. Without it, `tmh` uses `sandbox`. |
+| `--verbose` | One line per HTTP attempt on stderr: method, path, status, latency, request id. |
+| `--show-headers` | Each response's headers on stderr, with credentials redacted. |
+| `--max-retries <n>` | Retries of a transient failure on a request that is safe to replay. Default 2. |
+| `--idempotency-key <key>` | Your own `Idempotency-Key` for a write, in place of the generated one. |
 
-- [Command reference](docs/reference/commands/tmh.md): every command and
-  flag, generated from `tmh` itself.
-- [Resource reference](docs/reference/resources.md): every API operation
-  with its command, HTTP route, Scopes, retries and idempotency.
-- [Examples](examples/README.md): shell scripts for a roster sync, a
-  Certificate export and a webhook development loop.
-- [All documentation](docs/README.md), including the design records.
+[Recipes](docs/topics/recipes.md) has shell workflows built from these: jq
+pipelines, CSV exports, tailing Events, branching on exit codes.
 
 ## Exit codes
 
@@ -120,19 +120,38 @@ works, and each failure class has its own [exit code](#exit-codes).
 | `7` | Server or connection error: `5xx`, no response, a response that isn't the API's, or under `--wait` a timed-out Operation or a failed one whose problem has no status. |
 | `130` | Interrupted with Ctrl-C. |
 
-[Exit codes and errors](docs/guides/exit-codes.md) shows how errors print and
-how to branch on them in a script.
+[Exit codes](docs/topics/exit-codes.md) shows the error output for each.
+
+## Documentation
+
+| Topic | Read it for |
+|---|---|
+| [install](docs/topics/install.md) | `go install`, release channels, checksums, Docker, shell completion |
+| [login](docs/topics/login.md) | `tmh login`, the `sandbox` and `live` profiles, CI credentials, Scopes |
+| [requests](docs/topics/requests.md) | Arguments, flags, `-d` and `--data`, ETags, idempotency, retries, raw requests |
+| [output](docs/topics/output.md) | JSON on stdout, pages, `--all`, `--ndjson`, `--verbose` |
+| [operations](docs/topics/operations.md) | `--wait`, CSV exports, Certificate PDFs, CSV imports, batch changes |
+| [events](docs/topics/events.md) | The event log, `events tail --forward-to`, local signatures, Test deliveries |
+| [exit-codes](docs/topics/exit-codes.md) | Each exit code and the error it prints |
+| [environment](docs/topics/environment.md) | Environment variables, config and state files, privacy, the version check |
+| [recipes](docs/topics/recipes.md) | Shell workflows: jq, CSV files, `while read` loops, exit codes |
+
+- [Resource reference](docs/reference/resources.md): each API operation's
+  command, route, Scopes and retry behavior, with an example.
+- [Command reference](docs/reference/commands/tmh.md): every command and
+  flag, generated from the command tree.
+- [Examples](examples/README.md): scripts for a roster sync, a Certificate
+  export and a webhook development loop.
+- [Documentation index](docs/README.md), including the design records.
 
 ## Support and security
 
 <!-- TODO(Nick): confirm the support address before launch. -->
 
-For help, contact TeachMeHIPAA support and quote the request id `tmh` prints
-with every API error. To report a vulnerability, see
-[SECURITY.md](SECURITY.md); please don't open a public issue.
+Quote the request id from the error output when you contact TeachMeHIPAA
+support. Report vulnerabilities as [SECURITY.md](SECURITY.md) describes,
+never in a public issue. `tmh` sends no telemetry and logs no request or
+response bodies ([environment](docs/topics/environment.md#privacy)).
 
-`tmh` sends no telemetry and never logs request or response bodies; see
-[Configuration and privacy](docs/guides/configuration-and-privacy.md#privacy).
-See the [changelog](CHANGELOG.md) for what changed, and
-[CONTRIBUTING.md](CONTRIBUTING.md) to work on `tmh`. It is released under the
-[MIT License](LICENSE).
+[Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) ·
+[MIT License](LICENSE)

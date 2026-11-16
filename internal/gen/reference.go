@@ -66,16 +66,31 @@ func Reference(raw []byte) ([]byte, error) {
 
 	var out bytes.Buffer
 	fmt.Fprintf(&out, "%s\n\n# Resource reference\n\n", referenceBanner)
-	fmt.Fprintf(&out, "Every Developer API operation and the `tmh` command that calls it: %d resources and %d "+
-		"commands, generated from the Developer API release `%s`. Each command's page in the "+
-		"[command reference](commands/tmh.md) has its full help and every flag; the "+
-		"[Commands guide](../guides/commands.md) explains how arguments, flags and `-d` become a request.\n\n",
-		len(resources), methods, ir.Source.Release)
-	fmt.Fprintf(&out, "Paths are relative to the Environment's base URL (Live is `%s`; Sandbox is `%s`). "+
-		"`tmh` fills in `{orgId}` from your credentials' Organization, so it is never an argument. "+
-		"`tmh events tail`, `tmh events resend` and the raw `tmh get|post|patch|put|delete` requests are "+
-		"hand-written, not API operations; see the [command reference](commands/tmh.md).\n\n",
+	out.WriteString("```text\ntmh <resource> <method> [<id>...] [flags]\n```\n\n")
+	fmt.Fprintf(&out, "One section per Developer API operation: %d commands over %d resources, generated "+
+		"from API release `%s`. Under each command, a table gives the HTTP route, the Scopes it needs, what "+
+		"it prints and whether `tmh` retries it, followed by an example. The "+
+		"[command reference](commands/tmh.md) has every flag with its default, and "+
+		"[Requests](../topics/requests.md) shows how arguments, flags and `-d` turn into a request.\n\n",
+		methods, len(resources), ir.Source.Release)
+	fmt.Fprintf(&out, "Routes are relative to the Environment's base URL: `%s` for Live, `%s` for Sandbox. "+
+		"`{orgId}` never appears on the command line; `tmh` reads it from your credentials. "+
+		"`tmh events tail`, `tmh events resend` and the raw `tmh get`, `post`, `put`, `patch` and `delete` "+
+		"belong to `tmh` itself and call no single operation, so they have no section here.\n\n",
 		baseURL["live"], baseURL["sandbox"])
+
+	// The example under a command is its code sample: the one the API
+	// reference shows. Methods that share an operationId show the first's.
+	owners := map[string]bool{}
+	seen := map[string]bool{}
+	for _, r := range ir.Resources {
+		for _, m := range r.Methods {
+			if !seen[m.OperationID] {
+				seen[m.OperationID] = true
+				owners[strings.Join(append(slices.Clone(r.Path), m.Name), ".")] = true
+			}
+		}
+	}
 
 	out.WriteString("## Contents\n\n")
 	for _, r := range resources {
@@ -88,9 +103,9 @@ func Reference(raw []byte) ([]byte, error) {
 	}
 
 	out.WriteString("\n## Scopes\n\n")
-	out.WriteString("An Access token carries the Scopes its API client holds. A command that lists several " +
-		"sets needs any one of them; `tmh whoami` shows yours. See " +
-		"[Authentication and profiles](../guides/authentication-and-profiles.md#scopes).\n\n")
+	out.WriteString("`tmh whoami` lists the Scopes your API client holds. Where a command names more than " +
+		"one set, any one set is enough. A missing Scope fails the command with exit code 2; see " +
+		"[Login](../topics/login.md#scopes).\n\n")
 	out.WriteString("| Scope | Allows |\n|---|---|\n")
 	for _, s := range auth.Scopes {
 		fmt.Fprintf(&out, "| `%s` | %s |\n", s.Name, cell(s.Description))
@@ -104,13 +119,19 @@ func Reference(raw []byte) ([]byte, error) {
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", method.Name, err)
 			}
-			writeReferenceMethod(&out, name, m, method)
+			example := ""
+			if owners[method.Name] {
+				if example, err = g.sample(r.Path, m); err != nil {
+					return nil, fmt.Errorf("%s: %w", method.Name, err)
+				}
+			}
+			writeReferenceMethod(&out, name, m, method, example)
 		}
 	}
 	return out.Bytes(), nil
 }
 
-func writeReferenceMethod(out *bytes.Buffer, resourceName string, m irMethod, method resource.Method) {
+func writeReferenceMethod(out *bytes.Buffer, resourceName string, m irMethod, method resource.Method, example string) {
 	command := resourceName + " " + method.Use
 	verb := strings.Fields(method.Use)[0]
 	fmt.Fprintf(out, "\n### `%s %s`\n\n", resourceName, verb)
@@ -120,7 +141,7 @@ func writeReferenceMethod(out *bytes.Buffer, resourceName string, m irMethod, me
 	if m.Description != nil && strings.TrimSpace(*m.Description) != "" {
 		fmt.Fprintf(out, "%s\n\n", strings.TrimSpace(*m.Description))
 	}
-	fmt.Fprintf(out, "```sh\n%s [flags]\n```\n\n", command)
+	fmt.Fprintf(out, "```text\n%s [flags]\n```\n\n", command)
 
 	route := m.Path.Template
 	if m.Path.CustomVerb != nil {
@@ -166,8 +187,11 @@ func writeReferenceMethod(out *bytes.Buffer, resourceName string, m irMethod, me
 			fmt.Fprintf(out, "| `--%s` | %s |\n", flag.Name, cell(flag.Usage))
 		}
 	}
+	if example != "" {
+		fmt.Fprintf(out, "\nExample:\n\n```sh\n%s\n```\n", example)
+	}
 	page := strings.ReplaceAll(resourceName, " ", "_") + "_" + verb + ".md"
-	fmt.Fprintf(out, "\nEvery flag: [`%s %s`](commands/%s).\n", resourceName, verb, page)
+	fmt.Fprintf(out, "\nAll flags: [`%s %s`](commands/%s).\n", resourceName, verb, page)
 }
 
 func prints(m irMethod, method resource.Method) string {
@@ -212,7 +236,7 @@ func idempotency(key string) string {
 
 func referenceScopes(security irSecurity) string {
 	if security.Kind == "none" {
-		return "None: public, works without `tmh login`"
+		return "None (public): runs before `tmh login`"
 	}
 	alternatives := []string{}
 	for _, all := range security.AnyOf {

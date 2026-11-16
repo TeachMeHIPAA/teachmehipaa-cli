@@ -40,12 +40,13 @@ func TestTheResourceReferenceDescribesEachCommand(t *testing.T) {
 			"`PATCH /organizations/{orgId}/learners/{learnerId}`",
 			"| Scopes | `learners:write` |",
 			"| Retries | Never retried |",
+			"--if-match \"$etag\"",
 			"| Conditional | `--if-match <etag>` is required |",
 			"[`tmh learners update`](commands/tmh_learners_update.md)",
 		},
 		"### `tmh certificate-verifications retrieve`": {
 			"`GET /certificate-verifications/{tinyId}`",
-			"| Scopes | None: public, works without `tmh login` |",
+			"| Scopes | None (public): runs before `tmh login` |",
 		},
 		"### `tmh enrollments import`": {
 			"`POST /organizations/{orgId}/enrollments:import`",
