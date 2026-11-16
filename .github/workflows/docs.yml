@@ -35,7 +35,7 @@ jobs:
       # it shows fails here.
       - run: make check-generated
       - run: go test ./internal/doctest/ ./internal/docgen/ ./internal/gen/
-      - run: go test ./internal/commands/ -run 'Documented|EveryShellExample|EveryTmhCommand|ExitCodeTables'
+      - run: go test ./internal/commands/ -run 'Documented|EveryShellExample|EveryTmhCommand|ExitCodeTables|CodeSample|Synopsis|JqFilter'
       - run: scripts/stage-pages.sh _pages
       # GitHub's own Pages build of Jekyll, so the site renders the Markdown
       # the way github.com does, with no site generator of our own.

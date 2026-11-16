@@ -4,4 +4,4 @@
 // are hand-written.
 package generated
 
-//go:generate go run ../../../cmd/gen -ir ../../../openapi/sdk-ir.json -out . -reference ../../../docs/reference/resources.md
+//go:generate go run ../../../cmd/gen -ir ../../../openapi/sdk-ir.json -out . -reference ../../../docs/reference/resources.md -samples ../../../docs/reference/code-samples.json

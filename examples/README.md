@@ -1,9 +1,10 @@
 # Examples
 
-Shell scripts that use `tmh` against the Sandbox Environment. Each reads your
+Bash scripts that run `tmh` against the Sandbox Environment. Each reads a
 Sandbox API client's credentials from `TMH_CLIENT_ID` and
-`TMH_CLIENT_SECRET`, so it needs no `tmh login`, and stops with a message if
-they're unset. They need bash and, where noted, [jq](https://jqlang.org/).
+`TMH_CLIENT_SECRET`, needs no `tmh login`, and exits with a message when
+either is unset. Where noted, they need [jq](https://jqlang.org/). Shorter
+one-off workflows are in [recipes](../docs/topics/recipes.md).
 
 | Example | What it does |
 |---|---|
@@ -14,8 +15,7 @@ they're unset. They need bash and, where noted, [jq](https://jqlang.org/).
 
 ## Running them
 
-Install `tmh` (see [Getting started](../docs/guides/getting-started.md)),
-then:
+[Install](../docs/topics/install.md) `tmh`, then:
 
 <!-- doctest: illustrative -->
 ```sh
@@ -27,7 +27,7 @@ examples/export-certificates.sh certificates.csv --pdfs
 examples/webhook-dev-loop.sh http://localhost:3000/webhooks/tmh -- node server.js
 ```
 
-The scripts never touch Live: without `--live`, every `tmh` command uses the
-`sandbox` profile. CI checks them with [ShellCheck](https://www.shellcheck.net/),
-and the test suite checks that every `tmh` command and flag in them exists,
-but nothing runs them.
+The scripts never pass `--live`, so every `tmh` command in them uses the
+`sandbox` profile. CI lints them with [ShellCheck](https://www.shellcheck.net/),
+and the test suite checks each `tmh` command, flag and `jq` program in them.
+Nothing in CI runs them end to end.

@@ -6,17 +6,20 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/cmdutil"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/commands"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/doctest"
+	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/gen"
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/testkit"
 )
 
@@ -33,11 +36,11 @@ var shellLangs = []string{"console", "sh", "shell", "bash"}
 // documentedPages are the Markdown pages whose examples are tested.
 func documentedPages(t *testing.T) []string {
 	t.Helper()
-	guides, err := filepath.Glob(filepath.Join(repoRoot, "docs/guides/*.md"))
-	if err != nil || len(guides) == 0 {
-		t.Fatalf("no guides found: %v", err)
+	topics, err := filepath.Glob(filepath.Join(repoRoot, "docs/topics/*.md"))
+	if err != nil || len(topics) == 0 {
+		t.Fatalf("no topic pages found: %v", err)
 	}
-	return append([]string{filepath.Join(repoRoot, "README.md"), filepath.Join(repoRoot, "examples/README.md")}, guides...)
+	return append([]string{filepath.Join(repoRoot, "README.md"), filepath.Join(repoRoot, "examples/README.md")}, topics...)
 }
 
 func readFile(t *testing.T, path string) string {
@@ -66,6 +69,10 @@ func TestEveryShellExampleIsTestedOrMarkedIllustrative(t *testing.T) {
 			}
 			switch {
 			case block.Annotation == "" || block.Annotation == "illustrative":
+			case block.Annotation == "synopsis":
+				if block.Lang != "text" {
+					t.Errorf("%s: a synopsis is a text block, not %s", block.Where(rel(page)), block.Lang)
+				}
 			case block.Lang != "console":
 				t.Errorf("%s: only console blocks run as sessions; mark this %s block illustrative",
 					block.Where(rel(page)), block.Lang)
@@ -127,17 +134,13 @@ func TestEveryTmhCommandInTheDocsAndExamplesExists(t *testing.T) {
 // checkInvocation resolves args to a command and parses its flags and
 // arguments the way running it would, without running it.
 func checkInvocation(args []string) error {
-	root := commands.NewRoot(cmdutil.Deps{Stdin: strings.NewReader(""), Stdout: io.Discard, Stderr: io.Discard})
-	cmd, rest, err := root.Find(args)
-	if err != nil {
-		return err
-	}
-	if err := cmd.ParseFlags(rest); errors.Is(err, pflag.ErrHelp) {
+	cmd, err := parseInvocation(args)
+	if errors.Is(err, pflag.ErrHelp) {
 		return nil
 	} else if err != nil {
 		return err
 	}
-	if version, _ := cmd.Flags().GetBool("version"); version && cmd == root {
+	if version, _ := cmd.Flags().GetBool("version"); version && !cmd.HasParent() {
 		return nil
 	}
 	if !cmd.Runnable() {
@@ -150,6 +153,145 @@ func checkInvocation(args []string) error {
 		return err
 	}
 	return cmd.ValidateFlagGroups()
+}
+
+var (
+	synopsisWord  = regexp.MustCompile(`^[a-z][a-z-]*$`)
+	synopsisFlags = regexp.MustCompile(`(?:^|[\s\[|])(--[a-z][a-z0-9.-]*|-[a-zA-Z])\b`)
+)
+
+// TestEverySynopsisNamesRealCommandsAndFlags checks the usage blocks that
+// open the topic pages, `<!-- doctest: synopsis -->` text blocks with one
+// `tmh …` command per line: the command exists and has every flag named.
+func TestEverySynopsisNamesRealCommandsAndFlags(t *testing.T) {
+	checked := 0
+	for _, page := range documentedPages(t) {
+		for _, block := range doctest.Blocks(readFile(t, page)) {
+			if block.Annotation != "synopsis" {
+				continue
+			}
+			for _, line := range strings.Split(strings.TrimSpace(block.Body), "\n") {
+				checked++
+				words := strings.Fields(line)
+				if len(words) == 0 || words[0] != "tmh" {
+					t.Errorf("%s: %q: a synopsis line starts with tmh", block.Where(rel(page)), line)
+					continue
+				}
+				path := []string{}
+				for _, word := range words[1:] {
+					if !synopsisWord.MatchString(word) {
+						break
+					}
+					path = append(path, word)
+				}
+				root := commands.NewRoot(cmdutil.Deps{Stdin: strings.NewReader(""), Stdout: io.Discard, Stderr: io.Discard})
+				// Words past the command are literal arguments, such as
+				// `tmh open docs`; a group of commands takes none.
+				cmd, rest, err := root.Find(path)
+				if err == nil && len(rest) > 0 {
+					if cmd.HasSubCommands() {
+						err = fmt.Errorf("unknown command %q", rest[0])
+					} else {
+						err = cmd.ValidateArgs(rest)
+					}
+				}
+				if err != nil {
+					t.Errorf("%s: %q: %v", block.Where(rel(page)), line, err)
+					continue
+				}
+				for _, match := range synopsisFlags.FindAllStringSubmatch(line, -1) {
+					name := strings.TrimLeft(match[1], "-")
+					var flag *pflag.Flag
+					if len(name) == 1 {
+						flag = cmd.Flags().ShorthandLookup(name)
+						if flag == nil {
+							flag = cmd.InheritedFlags().ShorthandLookup(name)
+						}
+					} else {
+						flag = cmd.Flag(name)
+					}
+					if flag == nil {
+						t.Errorf("%s: %q: %s has no flag %s", block.Where(rel(page)), line, cmd.CommandPath(), match[1])
+					}
+				}
+			}
+		}
+	}
+	if checked < 20 {
+		t.Errorf("checked only %d synopsis lines; are the topic pages annotated?", checked)
+	}
+}
+
+// TestEveryJqFilterInTheDocsCompiles compiles each jq program in the docs,
+// the examples and the code samples with the jq on PATH. Only a compile
+// error (jq's exit code 3) fails: the programs run on null here, not on
+// what tmh prints.
+func TestEveryJqFilterInTheDocsCompiles(t *testing.T) {
+	jq, err := exec.LookPath("jq")
+	if err != nil {
+		t.Skip("jq isn't installed")
+	}
+	sources := shellSources(t)
+	for id, sample := range readCodeSamples(t).Samples {
+		sources[gen.SamplesPath+" "+id] = sample
+	}
+	checked := 0
+	for where, source := range sources {
+		commands, err := doctest.SimpleCommands(source)
+		if err != nil {
+			t.Errorf("%s: %v", where, err)
+			continue
+		}
+		for _, words := range commands {
+			if len(words) < 2 || words[0] != "jq" {
+				continue
+			}
+			args, program := jqProgram(words[1:])
+			if program == "" {
+				continue
+			}
+			checked++
+			cmd := exec.Command(jq, append(append(args, "-n"), program)...)
+			cmd.Stdin = strings.NewReader("")
+			output, err := cmd.CombinedOutput()
+			var exit *exec.ExitError
+			if errors.As(err, &exit) && exit.ExitCode() == 3 {
+				t.Errorf("%s: jq %s doesn't compile: %s", where, program, output)
+			}
+		}
+	}
+	if checked < 30 {
+		t.Errorf("compiled only %d jq programs; is the shell parser finding them?", checked)
+	}
+}
+
+// jqProgram splits jq's arguments into its options and its program: the
+// first argument that isn't an option or an option's value.
+func jqProgram(words []string) (options []string, program string) {
+	takesTwo := []string{"--arg", "--argjson", "--slurpfile", "--rawfile"}
+	for i := 0; i < len(words); i++ {
+		switch {
+		case slices.Contains(takesTwo, words[i]) && i+2 < len(words):
+			options = append(options, words[i:i+3]...)
+			i += 2
+		case strings.HasPrefix(words[i], "-") && words[i] != "-":
+			options = append(options, words[i])
+		default:
+			return options, words[i]
+		}
+	}
+	return options, ""
+}
+
+// parseInvocation resolves args to a command of a new command tree and
+// parses its flags, leaving the arguments in cmd.Flags().Args().
+func parseInvocation(args []string) (*cobra.Command, error) {
+	root := commands.NewRoot(cmdutil.Deps{Stdin: strings.NewReader(""), Stdout: io.Discard, Stderr: io.Discard})
+	cmd, rest, err := root.Find(args)
+	if err != nil {
+		return nil, err
+	}
+	return cmd, cmd.ParseFlags(rest)
 }
 
 // promptedCommands are a console block's commands: each `$ ` line, joined

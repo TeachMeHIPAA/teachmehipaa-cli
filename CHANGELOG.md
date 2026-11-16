@@ -66,3 +66,8 @@ Generated from the Developer API document release `trimmed-2026-11-15`.
   in the docs resolves.
 - A shorter README with a pre-release status callout that links to the
   guides, and `docs/README.md`, an index of all documentation.
+- `docs/reference/code-samples.json`, one `tmh` shell sample per Developer
+  API operationId for the API reference's `cli` tab, generated from the SDK
+  IR and checked against the command tree; the guides reorganized as topic
+  pages in `docs/topics/` that open with a synopsis, plus a recipes page of
+  shell workflows.

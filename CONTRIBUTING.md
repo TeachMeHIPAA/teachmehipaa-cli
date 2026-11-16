@@ -23,7 +23,7 @@ ShellCheck when it isn't installed (`brew install shellcheck`).
 | Path | What it is |
 |---|---|
 | `cmd/tmh` | `main`: wires the real transport, keyring, clock and terminal into the command tree. |
-| `cmd/gen`, `internal/gen` | The generator for the resource commands and `docs/reference/resources.md`. |
+| `cmd/gen`, `internal/gen` | The generator for the resource commands, `docs/reference/resources.md` and `docs/reference/code-samples.json`. |
 | `cmd/docgen`, `internal/docgen` | The generator for the command reference in `docs/reference/commands/`. |
 | `internal/doctest` | Reads the docs for the documentation tests: code blocks, links, anchors and shell commands. |
 | `internal/commands` | The root command and the hand-written commands. |
@@ -33,7 +33,7 @@ ShellCheck when it isn't installed (`brew install shellcheck`).
 | `internal/config` | Profiles, `config.toml`, `state.toml` and the keyring store. |
 | `internal/testkit` | The fake transport and harness every command test runs through. |
 | `openapi/` | The vendored Developer API document and SDK IR. See its README. |
-| `docs/guides/`, `docs/reference/` | The user documentation; see [Documentation](#documentation). |
+| `docs/topics/`, `docs/reference/` | The user documentation; see [Documentation](#documentation). |
 | `examples/` | Shell scripts using `tmh` against the Sandbox. |
 | `docs/adr/` | Architecture decisions. Read them before changing behavior they cover. |
 
@@ -66,7 +66,7 @@ signatures against vectors computed independently from the platform's
 canonical string. No test calls the live API or touches the real keyring.
 
 `internal/commands/exit_code_tables_test.go` parses the exit-code tables in
-the README and `docs/guides/exit-codes.md` and fails if either differs from
+the README and `docs/topics/exit-codes.md` and fails if either differs from
 the codes `tmh` returns, so update them together.
 
 ## Documentation
@@ -74,9 +74,10 @@ the codes `tmh` returns, so update them together.
 | Path | What it is | Kept in sync by |
 |---|---|---|
 | `README.md` | Overview, install, quickstart, links | The doc tests |
-| `docs/guides/*.md` | Task guides | The doc tests |
+| `docs/topics/*.md` | Topic pages, each opening with a synopsis, and the recipes | The doc tests |
 | `docs/reference/commands/*.md` | Every command and flag, from the command tree with `cobra/doc` | `make docs`; `go run ./cmd/docgen -check` and `internal/docgen`'s test |
-| `docs/reference/resources.md` | Every API operation and its command, from the IR | `make generate`; `go run ./cmd/gen -check` and `internal/gen`'s test |
+| `docs/reference/resources.md` | Every API operation and its command, with an example, from the IR | `make generate`; `go run ./cmd/gen -check` and `internal/gen`'s test |
+| `docs/reference/code-samples.json` | One shell sample per IR operationId, vendored by the monorepo's API reference as its `cli` samples | `make generate`; `go run ./cmd/gen -check`, `internal/gen`'s test and `code_samples_test.go` |
 | `docs/README.md`, `examples/README.md` | Indexes | Hand-written; links checked |
 | `examples/*.sh` | Scripts against the Sandbox | ShellCheck; the doc tests check their `tmh` commands |
 
@@ -97,6 +98,17 @@ are plain `go test`:
   `jq`. Their `tmh` commands, and those in `examples/*.sh`, are still parsed
   against the real command tree, so a renamed command, flag or argument
   fails the test.
+- **Synopses.** A `text` block marked `<!-- doctest: synopsis -->` holds one
+  `tmh …` usage line per line. Each line's command must exist, and each
+  `--flag` or `-f` on it must be a flag of that command.
+- **jq programs.** Every `jq` program in the illustrative blocks, the example
+  scripts and the code samples must compile with the `jq` on `PATH` (the
+  test skips without one).
+- **Code samples.** `code_samples_test.go` holds `code-samples.json` to the
+  IR: one sample per operationId, the release in `OPENAPI_VERSION`, and each
+  sample calling its operation's command once, with real flags and every
+  required body field set by a flag, `-d` or `--data`. The sample values
+  and the optional flag each sample shows live in `internal/gen/samples.go`.
 - **Links.** `internal/doctest` checks that every relative link and `#anchor`
   in every Markdown file resolves, with GitHub's heading anchors.
 
