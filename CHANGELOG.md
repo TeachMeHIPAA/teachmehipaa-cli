@@ -13,9 +13,10 @@ Generated from the Developer API document release `trimmed-2026-11-15`.
 ### Added
 
 - A `tmh <resource> <method>` command for each of the 43 Developer API
-  operations besides the token endpoint (45 commands), generated from the shared SDK IR, with path ids as arguments,
-  body fields as flags, `-d key=value`, `--data @file.json`, and the API's
-  own descriptions and Scopes in `--help`.
+  operations besides the token endpoint (45 commands), generated from the
+  shared SDK IR, with path ids as arguments, body fields as flags,
+  `-d key=value`, `--data @file.json`, and the API's own descriptions and
+  Scopes in `--help`.
 - `tmh login`, `logout` and `whoami`, with `sandbox` and `live` profiles,
   client secrets in the OS keyring (or a 0600 config file without one), and
   `TMH_CLIENT_ID` / `TMH_CLIENT_SECRET` for CI.

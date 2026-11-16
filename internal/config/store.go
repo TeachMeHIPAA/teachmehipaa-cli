@@ -50,6 +50,14 @@ type fileProfile struct {
 	ClientSecret   string `toml:"client_secret,omitempty"`
 }
 
+// removeOldRefreshToken drops the keyring entry an older tmh kept for a
+// partner-login profile's Refresh token, which nothing reads any more. The
+// result is ignored: the entry is usually absent, an unusable keyring holds
+// nothing to remove, and neither should fail a login or logout.
+func (s Store) removeOldRefreshToken(profile string) {
+	_ = s.Keyring.Delete(keyringService, profile+":refresh-token")
+}
+
 // Path is config.toml's location.
 func (s Store) Path() string { return filepath.Join(s.Dir, "config.toml") }
 
@@ -66,6 +74,7 @@ func (s Store) Save(profile string, credentials Credentials) (inFile bool, err e
 		inFile = true
 	}
 	config.Profiles[profile] = entry
+	s.removeOldRefreshToken(profile)
 	return inFile, s.write(config)
 }
 
@@ -120,6 +129,7 @@ func (s Store) Delete(profile string) (bool, error) {
 		return false, err
 	}
 	keyringErr := s.Keyring.Delete(keyringService, profile)
+	s.removeOldRefreshToken(profile)
 	_, inFile := config.Profiles[profile]
 	if !inFile {
 		return keyringErr == nil, nil

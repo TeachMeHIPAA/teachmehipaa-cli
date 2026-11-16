@@ -113,3 +113,37 @@ func TestWhoamiShowsOrganizationScopesAndEnvironment(t *testing.T) {
 		})
 	}
 }
+
+// An older tmh kept a partner-login profile's Refresh token in the keyring
+// under "<profile>:refresh-token". Nothing reads it any more, so logging in
+// or out must not leave it behind.
+func TestLoginAndLogoutRemoveAnOldRefreshToken(t *testing.T) {
+	const oldRefreshToken = "tmh_rt_grt_01JD8A2B3C4D5E6F7G8H9J0K1M.old-entropy"
+	tests := []struct {
+		name string
+		run  func(t *testing.T, env *testkit.Env)
+	}{
+		{name: "login", run: func(t *testing.T, env *testkit.Env) {
+			loginTo(t, env, nil, testkit.ClientSecret)
+		}},
+		{name: "logout", run: func(t *testing.T, env *testkit.Env) {
+			if logout := env.Run("logout"); logout.ExitCode != 0 {
+				t.Fatalf("logout exit code = %d, stderr = %q", logout.ExitCode, logout.Stderr)
+			}
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := testkit.NewEnv(t)
+			if err := env.Keyring.Set("tmh", "sandbox:refresh-token", oldRefreshToken); err != nil {
+				t.Fatal(err)
+			}
+
+			tt.run(t, env)
+
+			if token, err := env.Keyring.Get("tmh", "sandbox:refresh-token"); err == nil {
+				t.Errorf("the keyring still holds the old Refresh token %q", token)
+			}
+		})
+	}
+}

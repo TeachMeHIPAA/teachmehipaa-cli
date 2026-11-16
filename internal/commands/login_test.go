@@ -207,7 +207,7 @@ func TestLoginTakesOnlyAnAPIClient(t *testing.T) {
 }
 
 // A config.toml written by an older tmh may hold keys this one no longer
-// knows, such as a Partner app profile's, and must keep working.
+// knows, such as an old partner-login profile's, and must keep working.
 func TestAConfigFileWithUnknownKeysStillWorks(t *testing.T) {
 	env := testkit.NewEnv(t)
 	config := `future_setting = "on"
@@ -247,6 +247,6 @@ key = "value"
 		t.Fatalf("login exit code = %d, stderr = %q", login.ExitCode, login.Stderr)
 	}
 	if rewritten := readConfig(t, env); strings.Contains(rewritten, "refresh_token") || strings.Contains(rewritten, "partner_app") {
-		t.Errorf("login kept the old Partner app keys:\n%s", rewritten)
+		t.Errorf("login kept the old partner-login keys:\n%s", rewritten)
 	}
 }
