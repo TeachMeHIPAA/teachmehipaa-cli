@@ -19,8 +19,10 @@ fmt:
 	gofmt -w .
 
 # Regenerates the resource commands from openapi/sdk-ir.json.
+# go generate scans the package it runs in, so it trips over generated files the
+# generator has just deleted; calling the generator directly avoids that.
 generate:
-	go generate ./internal/commands/generated
+	go run ./cmd/gen -ir openapi/sdk-ir.json -out internal/commands/generated
 
 check-generated:
 	go run ./cmd/gen -check
