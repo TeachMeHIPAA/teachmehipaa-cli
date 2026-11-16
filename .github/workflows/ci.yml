@@ -42,6 +42,9 @@ jobs:
         with:
           go-version: stable
       - run: make lint
+      # ubuntu-latest ships ShellCheck; make lint skips it where it's missing,
+      # so CI runs it on its own to make sure it never silently doesn't.
+      - run: shellcheck examples/*.sh scripts/*.sh
 
   goreleaser:
     name: GoReleaser config

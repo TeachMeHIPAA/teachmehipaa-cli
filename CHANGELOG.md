@@ -43,3 +43,26 @@ Generated from the Developer API document release `trimmed-2026-11-15`.
   a Homebrew cask, a Scoop manifest, deb and rpm packages, and a
   `ghcr.io/teachmehipaa/tmh` image, with SHA-256 checksums signed by
   Sigstore.
+
+### Documentation
+
+- Guides in `docs/guides/`: getting started, authentication and profiles,
+  commands, output and scripting, webhooks and `events tail`, Operations and
+  files, exit codes and errors, and configuration and privacy. Every
+  `console` session in them and in the README runs against a fake API in
+  the test suite and must print what the docs show; every other `tmh`
+  command in the docs is checked against the real command tree.
+- A command reference in `docs/reference/commands/`, generated from `tmh`'s
+  command tree with `cobra/doc` (`make docs`), and
+  `docs/reference/resources.md`, generated from the SDK IR: every API
+  operation with its command, HTTP route, Scopes, retries, idempotency and
+  conditional behavior. Both are checked for staleness by `make lint` and the
+  tests.
+- Example scripts in `examples/`: a quickstart, a roster sync by External ID,
+  a Certificate export with `--wait -o`, and an `events tail --forward-to`
+  development loop, checked with ShellCheck in CI.
+- A documentation site built with GitHub Pages' Jekyll on every pull request
+  and published from `main`, and a check that every relative link and anchor
+  in the docs resolves.
+- A shorter README with a pre-release status callout that links to the
+  guides, and `docs/README.md`, an index of all documentation.

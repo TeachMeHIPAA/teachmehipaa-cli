@@ -69,6 +69,17 @@ See "tmh completion <shell> --help" to install it permanently.`,
 	return root
 }
 
+// NewRoot is the command tree Execute runs, with cobra's help and completion
+// commands added as Execute would add them, for generating and checking the
+// command reference without running a command.
+func NewRoot(deps cmdutil.Deps) *cobra.Command {
+	root := newRoot(deps, &updateNotice{deps: deps})
+	root.InitDefaultHelpCmd()
+	root.InitDefaultVersionFlag()
+	root.InitDefaultCompletionCmd()
+	return root
+}
+
 // Execute runs `tmh <args>` and returns the process exit code.
 func Execute(ctx context.Context, deps cmdutil.Deps, args []string) int {
 	notice := &updateNotice{deps: deps}

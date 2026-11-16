@@ -1,0 +1,25 @@
+# Jekyll configuration for the documentation site that the Docs workflow
+# builds from the pages scripts/stage-pages.sh copies into one directory.
+title: tmh, the TeachMeHIPAA CLI
+description: Work with the TeachMeHIPAA Developer API from your terminal.
+url: https://teachmehipaa.github.io
+baseurl: /teachmehipaa-cli
+theme: jekyll-theme-primer
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+plugins:
+  - jekyll-relative-links
+  - jekyll-readme-index
+  - jekyll-default-layout
+relative_links:
+  enabled: true
+  collections: false
+# Set explicitly, so the theme's repository and "edit this page" links point
+# at the source on main rather than at the Pages deployment.
+repository: TeachMeHIPAA/teachmehipaa-cli
+github:
+  source:
+    branch: main
+    path: /
