@@ -15,18 +15,14 @@ import (
 // follow the Developer API's schemas in openapi/sdk-ir.json.
 var sessions = map[string]func(s *docSession){
 	"readme-quickstart": func(s *docSession) {
+		// The README logs in with `tmh login`, so the session's commands
+		// read stored credentials rather than TMH_CLIENT_ID.
+		s.storedLogin()
 		s.scriptLogins("test", 2)
-		s.env.Transport.Script(listLearnersRoute, testkit.JSON(`{"items":[`+testkit.LearnerBody+`],"nextCursor":"eyJvZmZzZXQiOjF9"}`))
+		s.env.Transport.Script("GET "+orgPath+"/compliance", testkit.JSON(complianceSummary))
 	},
 	"version": func(s *docSession) {
 		s.env.Build = version.Info{Version: "1.0.0", Commit: "39276f1", Date: "2026-11-15T19:27:47Z"}
-	},
-	"whoami": func(s *docSession) { s.loggedIn("test") },
-	"first-call": func(s *docSession) {
-		s.loggedIn("test")
-		s.env.Transport.Script("GET "+orgPath+"/compliance", testkit.JSON(`{"asOf":"2026-11-15T12:00:00.000Z",`+
-			`"courseId":"hipaa-2026","totals":{"learners":42,"compliant":30,"expiringSoon":3,"expired":1,"inProgress":5,`+
-			`"notStarted":2,"inviteBounced":1},"compliantRate":0.714}`))
 	},
 	"invite": func(s *docSession) {
 		s.loggedIn("test")
@@ -35,7 +31,7 @@ var sessions = map[string]func(s *docSession){
 			`"course":{"courseId":"hipaa-2026","title":"HIPAA Training 2026"},"invitedAt":"2026-11-15T12:00:00.000Z",` +
 			`"startedAt":null,"completedAt":null,"dueAt":"2026-12-15T00:00:00.000Z","certificate":null,"delivery":"email"}`})
 	},
-	"getting-started-not-found": func(s *docSession) {
+	"recipe-not-found": func(s *docSession) {
 		s.loggedIn("test")
 		s.env.Transport.Script("GET "+orgPath+"/learners/sub_01JD8ZZZZZZZZZZZZZZZZZZZZZ",
 			docProblem(404, "req_01JD8Q", `{"code":"not_found","title":"Not found","status":404,"detail":"No Learner with that id."}`))
@@ -44,13 +40,7 @@ var sessions = map[string]func(s *docSession){
 		s.env.Vars["TMH_SECRET"] = testkit.ClientSecret
 		s.scriptLogins("test", 1)
 	},
-	"logout": func(s *docSession) {
-		s.scriptLogins("test", 1)
-		s.env.Stdin = testkit.ClientSecret
-		if login := s.env.Run("login", "--client-id", testkit.ClientID); login.ExitCode != 0 {
-			s.t.Fatalf("login before logout: %q", login.Stderr)
-		}
-	},
+	"logout":        func(s *docSession) { s.storedLogin() },
 	"not-logged-in": func(*docSession) {},
 	"env-credentials": func(s *docSession) {
 		s.scriptLogins("live", 1)
@@ -199,6 +189,21 @@ const (
 	// localSecret is the local Signing secret the docs show.
 	localSecret = "3q2+7wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 )
+
+const complianceSummary = `{"asOf":"2026-11-15T12:00:00.000Z","courseId":"hipaa-2026",` +
+	`"totals":{"learners":42,"compliant":30,"expiringSoon":3,"expired":1,"inProgress":5,` +
+	`"notStarted":2,"inviteBounced":1},"compliantRate":0.714}`
+
+// storedLogin runs `tmh login` for the sandbox profile, so the session's
+// commands read the client secret from the keyring.
+func (s *docSession) storedLogin() {
+	s.scriptLogins("test", 1)
+	s.env.Stdin = testkit.ClientSecret
+	if login := s.env.Run("login", "--client-id", testkit.ClientID); login.ExitCode != 0 {
+		s.t.Fatalf("tmh login: %q", login.Stderr)
+	}
+	s.env.Stdin = ""
+}
 
 // loggedIn is a machine with TMH_CLIENT_ID and TMH_CLIENT_SECRET set.
 func (s *docSession) loggedIn(mode string) {

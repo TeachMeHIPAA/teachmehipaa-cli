@@ -2,9 +2,13 @@
 
 # Resource reference
 
-Every Developer API operation and the `tmh` command that calls it: 13 resources and 45 commands, generated from the Developer API release `trimmed-2026-11-15`. Each command's page in the [command reference](commands/tmh.md) has its full help and every flag; the [Commands guide](../guides/commands.md) explains how arguments, flags and `-d` become a request.
+```text
+tmh <resource> <method> [<id>...] [flags]
+```
 
-Paths are relative to the Environment's base URL (Live is `https://api.tme.so/v1`; Sandbox is `https://sandbox.api.tme.so/v1`). `tmh` fills in `{orgId}` from your credentials' Organization, so it is never an argument. `tmh events tail`, `tmh events resend` and the raw `tmh get|post|patch|put|delete` requests are hand-written, not API operations; see the [command reference](commands/tmh.md).
+One section per Developer API operation: 45 commands over 13 resources, generated from API release `trimmed-2026-11-15`. Under each command, a table gives the HTTP route, the Scopes it needs, what it prints and whether `tmh` retries it, followed by an example. The [command reference](commands/tmh.md) has every flag with its default, and [Requests](../topics/requests.md) shows how arguments, flags and `-d` turn into a request.
+
+Routes are relative to the Environment's base URL: `https://api.tme.so/v1` for Live, `https://sandbox.api.tme.so/v1` for Sandbox. `{orgId}` never appears on the command line; `tmh` reads it from your credentials. `tmh events tail`, `tmh events resend` and the raw `tmh get`, `post`, `put`, `patch` and `delete` belong to `tmh` itself and call no single operation, so they have no section here.
 
 ## Contents
 
@@ -24,7 +28,7 @@ Paths are relative to the Environment's base URL (Live is `https://api.tme.so/v1
 
 ## Scopes
 
-An Access token carries the Scopes its API client holds. A command that lists several sets needs any one of them; `tmh whoami` shows yours. See [Authentication and profiles](../guides/authentication-and-profiles.md#scopes).
+`tmh whoami` lists the Scopes your API client holds. Where a command names more than one set, any one set is enough. A missing Scope fails the command with exit code 2; see [Login](../topics/login.md#scopes).
 
 | Scope | Allows |
 |---|---|
@@ -46,7 +50,7 @@ List all audit events
 
 Returns a list of the organization's audit events, newest first. Filter by `type`, `transition`, `subjectId`, or a `since` and `until` range.
 
-```sh
+```text
 tmh audit-events list [flags]
 ```
 
@@ -68,7 +72,16 @@ tmh audit-events list [flags]
 | `--since` | Inclusive lower bound on `at` (ISO-8601 instant). |
 | `--until` | Inclusive upper bound on `at` (ISO-8601 instant). |
 
-Every flag: [`tmh audit-events list`](commands/tmh_audit-events_list.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh audit-events list \
+  --type learner.updated \
+  | jq -r '.items[] | [.at, .type, .actorSubjectId] | @tsv'
+```
+
+All flags: [`tmh audit-events list`](commands/tmh_audit-events_list.md).
 
 ## `tmh auth`
 
@@ -78,7 +91,7 @@ Retrieve the current token
 
 Describes the access token you call with: whether it belongs to an API client or a person, its organization, its scopes and when it expires. Needs no scope.
 
-```sh
+```text
 tmh auth introspect [flags]
 ```
 
@@ -90,7 +103,14 @@ tmh auth introspect [flags]
 | Retries | Retried on connection errors, 409 `conflict`, 429 and 5xx (`--max-retries`) |
 | Idempotency | None |
 
-Every flag: [`tmh auth introspect`](commands/tmh_auth_introspect.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh auth introspect | jq -r '.scopes[]'
+```
+
+All flags: [`tmh auth introspect`](commands/tmh_auth_introspect.md).
 
 ## `tmh certificate-verifications`
 
@@ -100,19 +120,26 @@ Verify a certificate
 
 Verifies the certificate behind a `https://tme.so/{tinyId}` link. Needs no access token. Limited to 60 requests a minute per IP address.
 
-```sh
+```text
 tmh certificate-verifications retrieve <tinyId> [flags]
 ```
 
 | | |
 |---|---|
 | HTTP | `GET /certificate-verifications/{tinyId}` |
-| Scopes | None: public, works without `tmh login` |
+| Scopes | None (public): runs before `tmh login` |
 | Prints | `CertificateVerification` as JSON |
 | Retries | Retried on connection errors, 409 `conflict`, 429 and 5xx (`--max-retries`) |
 | Idempotency | None |
 
-Every flag: [`tmh certificate-verifications retrieve`](commands/tmh_certificate-verifications_retrieve.md).
+Example:
+
+```sh
+# Public: works before tmh login.
+tmh certificate-verifications retrieve a7Kq2Z | jq -r .status
+```
+
+All flags: [`tmh certificate-verifications retrieve`](commands/tmh_certificate-verifications_retrieve.md).
 
 ## `tmh certificates`
 
@@ -122,7 +149,7 @@ Download a certificate
 
 Downloads the certificate as a PDF. Revoked and expired certificates are watermarked. Requires the `certificates:read` scope.
 
-```sh
+```text
 tmh certificates download-pdf <certId> [flags]
 ```
 
@@ -134,7 +161,15 @@ tmh certificates download-pdf <certId> [flags]
 | Retries | Retried on connection errors, 409 `conflict`, 429 and 5xx (`--max-retries`) |
 | Idempotency | None |
 
-Every flag: [`tmh certificates download-pdf`](commands/tmh_certificates_download-pdf.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh certificates download-pdf cert_01JD8F3G5H7J9K1M3N5P7Q9R1S \
+  -o certificate.pdf
+```
+
+All flags: [`tmh certificates download-pdf`](commands/tmh_certificates_download-pdf.md).
 
 ### `tmh certificates export`
 
@@ -142,7 +177,7 @@ Export certificates
 
 Exports the organization's certificate records as CSV. Requires the `certificates:read` scope.
 
-```sh
+```text
 tmh certificates export [flags]
 ```
 
@@ -158,7 +193,14 @@ tmh certificates export [flags]
 |---|---|
 | `--format` | The file format. Only `csv` today; one of: csv, zip (required) |
 
-Every flag: [`tmh certificates export`](commands/tmh_certificates_export.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh certificates export --format csv -o certificates.csv
+```
+
+All flags: [`tmh certificates export`](commands/tmh_certificates_export.md).
 
 ### `tmh certificates list`
 
@@ -166,7 +208,7 @@ List all certificates
 
 Returns a list of the organization's certificates. Pass `subjectId` to list one learner's.
 
-```sh
+```text
 tmh certificates list [flags]
 ```
 
@@ -184,7 +226,16 @@ tmh certificates list [flags]
 | `--cursor` | The `nextCursor` from the previous page. |
 | `--subject-id` | Filter to one holder (canonical subject id). |
 
-Every flag: [`tmh certificates list`](commands/tmh_certificates_list.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh certificates list \
+  --subject-id sub_01JD80AB2C3D4E5F6G7H8J9K0M \
+  | jq -r '.items[] | [.certificateId, .status, .expiresAt] | @tsv'
+```
+
+All flags: [`tmh certificates list`](commands/tmh_certificates_list.md).
 
 ### `tmh certificates retrieve`
 
@@ -192,7 +243,7 @@ Retrieve a certificate
 
 Retrieves a certificate.
 
-```sh
+```text
 tmh certificates retrieve <certId> [flags]
 ```
 
@@ -204,7 +255,15 @@ tmh certificates retrieve <certId> [flags]
 | Retries | Retried on connection errors, 409 `conflict`, 429 and 5xx (`--max-retries`) |
 | Idempotency | None |
 
-Every flag: [`tmh certificates retrieve`](commands/tmh_certificates_retrieve.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh certificates retrieve cert_01JD8F3G5H7J9K1M3N5P7Q9R1S \
+  | jq -r .expiresAt
+```
+
+All flags: [`tmh certificates retrieve`](commands/tmh_certificates_retrieve.md).
 
 ### `tmh certificates retrieve-links`
 
@@ -212,7 +271,7 @@ Retrieve certificate links
 
 Retrieves the certificate's LinkedIn add-to-profile link and its public `tme.so` verification link. Requires the `certificates:read` scope.
 
-```sh
+```text
 tmh certificates retrieve-links <certId> [flags]
 ```
 
@@ -224,7 +283,15 @@ tmh certificates retrieve-links <certId> [flags]
 | Retries | Retried on connection errors, 409 `conflict`, 429 and 5xx (`--max-retries`) |
 | Idempotency | None |
 
-Every flag: [`tmh certificates retrieve-links`](commands/tmh_certificates_retrieve-links.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh certificates retrieve-links cert_01JD8F3G5H7J9K1M3N5P7Q9R1S \
+  | jq -r .shortLink
+```
+
+All flags: [`tmh certificates retrieve-links`](commands/tmh_certificates_retrieve-links.md).
 
 ## `tmh compliance`
 
@@ -234,7 +301,7 @@ Retrieve the compliance summary
 
 Counts the organization's learners in one course by status. Removed learners aren't counted.
 
-```sh
+```text
 tmh compliance retrieve [flags]
 ```
 
@@ -250,7 +317,14 @@ tmh compliance retrieve [flags]
 |---|---|
 | `--course-id` | The course. Defaults to the organization's default course. |
 
-Every flag: [`tmh compliance retrieve`](commands/tmh_compliance_retrieve.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh compliance retrieve --course-id hipaa-2026 | jq .compliantRate
+```
+
+All flags: [`tmh compliance retrieve`](commands/tmh_compliance_retrieve.md).
 
 ## `tmh courses`
 
@@ -260,14 +334,14 @@ List all courses
 
 Returns a list of the courses in the public catalog. Needs no access token.
 
-```sh
+```text
 tmh courses list [flags]
 ```
 
 | | |
 |---|---|
 | HTTP | `GET /courses` |
-| Scopes | None: public, works without `tmh login` |
+| Scopes | None (public): runs before `tmh login` |
 | Prints | A page of `Course` as JSON; `--all` follows every page and `--ndjson` prints one item per line |
 | Retries | Retried on connection errors, 409 `conflict`, 429 and 5xx (`--max-retries`) |
 | Idempotency | None |
@@ -277,7 +351,14 @@ tmh courses list [flags]
 | `--limit` | How many objects to return, between 1 and 100. Defaults to 20. |
 | `--cursor` | The `nextCursor` from the previous page. |
 
-Every flag: [`tmh courses list`](commands/tmh_courses_list.md).
+Example:
+
+```sh
+# Public: works before tmh login.
+tmh courses list | jq -r '.items[] | [.courseId, .title] | @tsv'
+```
+
+All flags: [`tmh courses list`](commands/tmh_courses_list.md).
 
 ### `tmh courses retrieve`
 
@@ -285,19 +366,26 @@ Retrieve a course
 
 Retrieves a course from the public catalog.
 
-```sh
+```text
 tmh courses retrieve <courseId> [flags]
 ```
 
 | | |
 |---|---|
 | HTTP | `GET /courses/{courseId}` |
-| Scopes | None: public, works without `tmh login` |
+| Scopes | None (public): runs before `tmh login` |
 | Prints | `Course` as JSON |
 | Retries | Retried on connection errors, 409 `conflict`, 429 and 5xx (`--max-retries`) |
 | Idempotency | None |
 
-Every flag: [`tmh courses retrieve`](commands/tmh_courses_retrieve.md).
+Example:
+
+```sh
+# Public: works before tmh login.
+tmh courses retrieve hipaa-2026 | jq -r .title
+```
+
+All flags: [`tmh courses retrieve`](commands/tmh_courses_retrieve.md).
 
 ## `tmh enrollments`
 
@@ -307,7 +395,7 @@ Update many enrollments
 
 Reminds, resends, cancels, renews, archives or unarchives up to 500 enrollments in one request, chosen by id or by filter. Each enrollment succeeds or fails on its own. Requires the `enrollments:write` scope.
 
-```sh
+```text
 tmh enrollments batch [flags]
 ```
 
@@ -324,7 +412,17 @@ tmh enrollments batch [flags]
 | `--operation` | What to do to each enrollment: `remind`, `resendInvite`, `cancel`, `recertify`, `archive` or `unarchive`; one of: remind, resendInvite, cancel, recertify, archive, unarchive (required) |
 | `--select.enrollment-ids` | Enrollment ids (required) |
 
-Every flag: [`tmh enrollments batch`](commands/tmh_enrollments_batch.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh enrollments batch \
+  --operation remind \
+  --select.enrollment-ids enr_01JD8K2M4N6P8Q0R2S4T6V8W0X \
+  | jq -r '.results[] | [.enrollmentId, .outcome] | @tsv'
+```
+
+All flags: [`tmh enrollments batch`](commands/tmh_enrollments_batch.md).
 
 ### `tmh enrollments batch-by-filter`
 
@@ -332,7 +430,7 @@ Update many enrollments
 
 Reminds, resends, cancels, renews, archives or unarchives up to 500 enrollments in one request, chosen by id or by filter. Each enrollment succeeds or fails on its own. Requires the `enrollments:write` scope.
 
-```sh
+```text
 tmh enrollments batch-by-filter [flags]
 ```
 
@@ -351,7 +449,7 @@ tmh enrollments batch-by-filter [flags]
 | `--select.filter.course-id` | Course id |
 | `--select.filter.archived` | Archived |
 
-Every flag: [`tmh enrollments batch-by-filter`](commands/tmh_enrollments_batch-by-filter.md).
+All flags: [`tmh enrollments batch-by-filter`](commands/tmh_enrollments_batch-by-filter.md).
 
 ### `tmh enrollments cancel`
 
@@ -359,7 +457,7 @@ Cancel an enrollment
 
 Cancels an invite that hasn't been accepted yet and returns its seat to the pool. With `refund: true`, refunds the seat to the card that paid for it instead. The enrollment remains, with status `CANCELLED`. Requires the `enrollments:write` scope.
 
-```sh
+```text
 tmh enrollments cancel <enrollmentId> [flags]
 ```
 
@@ -375,7 +473,16 @@ tmh enrollments cancel <enrollmentId> [flags]
 |---|---|
 | `--refund` | Refund the seat to the card that paid for it instead of returning it to the pool. Defaults to `false`. |
 
-Every flag: [`tmh enrollments cancel`](commands/tmh_enrollments_cancel.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh enrollments cancel enr_01JD8K2M4N6P8Q0R2S4T6V8W0X \
+  --refund \
+  | jq -r .status
+```
+
+All flags: [`tmh enrollments cancel`](commands/tmh_enrollments_cancel.md).
 
 ### `tmh enrollments create`
 
@@ -383,7 +490,7 @@ Create an enrollment
 
 Invites a person to a course, creating their profile if needed, and uses one seat. The course defaults to `hipaa`. Requires the `enrollments:write` scope.
 
-```sh
+```text
 tmh enrollments create [flags]
 ```
 
@@ -401,7 +508,17 @@ tmh enrollments create [flags]
 | `--name` | The learner's full name. |
 | `--course-id` | The course to invite them to. Defaults to `hipaa`. |
 
-Every flag: [`tmh enrollments create`](commands/tmh_enrollments_create.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh enrollments create \
+  --email dana.whitfield@example.com \
+  --course-id hipaa-2026 \
+  | jq -r .enrollmentId
+```
+
+All flags: [`tmh enrollments create`](commands/tmh_enrollments_create.md).
 
 ### `tmh enrollments export`
 
@@ -409,7 +526,7 @@ Export enrollments
 
 Exports the organization's enrollments as CSV. Requires the `enrollments:read` scope.
 
-```sh
+```text
 tmh enrollments export [flags]
 ```
 
@@ -425,7 +542,14 @@ tmh enrollments export [flags]
 |---|---|
 | `--format` | The file format. Only `csv` today; one of: csv, xlsx (required) |
 
-Every flag: [`tmh enrollments export`](commands/tmh_enrollments_export.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh enrollments export --format csv -o enrollments.csv
+```
+
+All flags: [`tmh enrollments export`](commands/tmh_enrollments_export.md).
 
 ### `tmh enrollments import`
 
@@ -433,7 +557,7 @@ Import learners from CSV
 
 Invites everyone in a CSV file with an `email` column (and optional `name` and `courseId`). Send `validateOnly: true` first to preview the file without inviting anyone. Up to 500 rows. Requires the `enrollments:write` scope.
 
-```sh
+```text
 tmh enrollments import [flags]
 ```
 
@@ -451,7 +575,14 @@ tmh enrollments import [flags]
 | `--file <path>` | The `text/csv` file to upload; `-` reads stdin |
 | `--options.course-id` | The course to invite everyone to. Defaults to the organization's default course. |
 
-Every flag: [`tmh enrollments import`](commands/tmh_enrollments_import.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh enrollments import --file roster.csv --wait | jq .response
+```
+
+All flags: [`tmh enrollments import`](commands/tmh_enrollments_import.md).
 
 ### `tmh enrollments list`
 
@@ -459,7 +590,7 @@ List all enrollments
 
 Returns a list of the organization's enrollments. Filter by `status`, `courseId` or `archived`. Requires the `enrollments:read` scope.
 
-```sh
+```text
 tmh enrollments list [flags]
 ```
 
@@ -480,7 +611,16 @@ tmh enrollments list [flags]
 | `--archived` | Archived; one of: true, false |
 | `--include` | Opt-in enrichment. With `priorCertificate`, an item carries `priorCertificate` (object, or null when the server confirmed there is none). The key is omitted on an item whose answer is unknown, and on every item of the page if the certificate lookup failed; clients must treat a missing key as unknown, never as null; one of: priorCertificate |
 
-Every flag: [`tmh enrollments list`](commands/tmh_enrollments_list.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh enrollments list \
+  --status CERTIFIED \
+  | jq -r '.items[] | [.enrollmentId, .subjectId, .expiresAt] | @tsv'
+```
+
+All flags: [`tmh enrollments list`](commands/tmh_enrollments_list.md).
 
 ### `tmh enrollments preview-import`
 
@@ -488,7 +628,7 @@ Import learners from CSV
 
 Invites everyone in a CSV file with an `email` column (and optional `name` and `courseId`). Send `validateOnly: true` first to preview the file without inviting anyone. Up to 500 rows. Requires the `enrollments:write` scope.
 
-```sh
+```text
 tmh enrollments preview-import [flags]
 ```
 
@@ -505,7 +645,7 @@ tmh enrollments preview-import [flags]
 | `--file <path>` | The `text/csv` file to upload; `-` reads stdin |
 | `--options.course-id` | The course to invite everyone to. Defaults to the organization's default course. |
 
-Every flag: [`tmh enrollments preview-import`](commands/tmh_enrollments_preview-import.md).
+All flags: [`tmh enrollments preview-import`](commands/tmh_enrollments_preview-import.md).
 
 ### `tmh enrollments remind`
 
@@ -513,7 +653,7 @@ Remind an enrollment
 
 Emails the learner again: the invitation if they haven't joined, or a reminder linking to the training if they have. Requires the `enrollments:write` scope.
 
-```sh
+```text
 tmh enrollments remind <enrollmentId> [flags]
 ```
 
@@ -525,7 +665,14 @@ tmh enrollments remind <enrollmentId> [flags]
 | Retries | Retried on connection errors, 409 `conflict`, 429 and 5xx (`--max-retries`) |
 | Idempotency | `tmh` generates an Idempotency-Key and reuses it on retries; `--idempotency-key` sets your own |
 
-Every flag: [`tmh enrollments remind`](commands/tmh_enrollments_remind.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh enrollments remind enr_01JD8K2M4N6P8Q0R2S4T6V8W0X | jq -r .action
+```
+
+All flags: [`tmh enrollments remind`](commands/tmh_enrollments_remind.md).
 
 ### `tmh enrollments renew`
 
@@ -533,7 +680,7 @@ Renew an enrollment
 
 Starts the next certification cycle for a certified learner and invites them again, using one seat. Retrying never uses a second seat. Requires the `enrollments:write` scope.
 
-```sh
+```text
 tmh enrollments renew <enrollmentId> [flags]
 ```
 
@@ -545,7 +692,14 @@ tmh enrollments renew <enrollmentId> [flags]
 | Retries | Retried on connection errors, 409 `conflict`, 429 and 5xx (`--max-retries`) |
 | Idempotency | `tmh` generates an Idempotency-Key and reuses it on retries; `--idempotency-key` sets your own |
 
-Every flag: [`tmh enrollments renew`](commands/tmh_enrollments_renew.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh enrollments renew enr_01JD8K2M4N6P8Q0R2S4T6V8W0X | jq .cycle
+```
+
+All flags: [`tmh enrollments renew`](commands/tmh_enrollments_renew.md).
 
 ### `tmh enrollments resend-invite`
 
@@ -553,7 +707,7 @@ Resend an invite
 
 Sends a pending invite again, within the same cycle. To invite a certified learner again, renew the enrollment. Requires the `enrollments:write` scope.
 
-```sh
+```text
 tmh enrollments resend-invite <enrollmentId> [flags]
 ```
 
@@ -565,7 +719,15 @@ tmh enrollments resend-invite <enrollmentId> [flags]
 | Retries | Retried on connection errors, 409 `conflict`, 429 and 5xx (`--max-retries`) |
 | Idempotency | `tmh` generates an Idempotency-Key and reuses it on retries; `--idempotency-key` sets your own |
 
-Every flag: [`tmh enrollments resend-invite`](commands/tmh_enrollments_resend-invite.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh enrollments resend-invite enr_01JD8K2M4N6P8Q0R2S4T6V8W0X \
+  | jq -r .action
+```
+
+All flags: [`tmh enrollments resend-invite`](commands/tmh_enrollments_resend-invite.md).
 
 ### `tmh enrollments retrieve`
 
@@ -573,7 +735,7 @@ Retrieve an enrollment
 
 Retrieves an enrollment. Requires the `enrollments:read` scope.
 
-```sh
+```text
 tmh enrollments retrieve <enrollmentId> [flags]
 ```
 
@@ -585,7 +747,15 @@ tmh enrollments retrieve <enrollmentId> [flags]
 | Retries | Retried on connection errors, 409 `conflict`, 429 and 5xx (`--max-retries`) |
 | Idempotency | None |
 
-Every flag: [`tmh enrollments retrieve`](commands/tmh_enrollments_retrieve.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh enrollments retrieve enr_01JD8K2M4N6P8Q0R2S4T6V8W0X \
+  | jq -r .effectiveStatus
+```
+
+All flags: [`tmh enrollments retrieve`](commands/tmh_enrollments_retrieve.md).
 
 ## `tmh events`
 
@@ -595,7 +765,7 @@ List all events
 
 Returns a list of the organization's events from the last 30 days, oldest first. Pass the last `eventId` you processed as `after` to resume where you stopped, and `type` to list one event type.
 
-```sh
+```text
 tmh events list [flags]
 ```
 
@@ -613,7 +783,16 @@ tmh events list [flags]
 | `--after` | Return events after this event id (exclusive). The previous page's `nextCursor`. |
 | `--type` | Filter to one event type; one of: enrollment.certified, seat.consumed, seat.freed, learner.invited, learner.started, learner.certified, learner.expiring, learner.expired, learner.removed, invite.bounced, certificate.revoked, seats.low |
 
-Every flag: [`tmh events list`](commands/tmh_events_list.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh events list \
+  --type learner.certified \
+  | jq -r '.items[] | [.occurredAt, .eventId, .data.email] | @tsv'
+```
+
+All flags: [`tmh events list`](commands/tmh_events_list.md).
 
 ## `tmh learners`
 
@@ -623,7 +802,7 @@ Create many learners
 
 Creates or retrieves up to 500 learners in one request. Each item works like creating one learner and succeeds or fails on its own.
 
-```sh
+```text
 tmh learners batch-upsert [flags]
 ```
 
@@ -640,7 +819,17 @@ tmh learners batch-upsert [flags]
 | `--delivery` | Applies to every item. `email` (default) sends invites; `none` sends nothing; one of: email, none |
 | `--seat-policy` | Applies to every item. `require_available` fails an item when no seat is free; one of: require_available |
 
-Every flag: [`tmh learners batch-upsert`](commands/tmh_learners_batch-upsert.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh learners batch-upsert \
+  -d 'items:=[{"externalId":"hr-1042","email":"dana.whitfield@example.com","name":"Dana Whitfield"}]' \
+  --wait \
+  | jq .response
+```
+
+All flags: [`tmh learners batch-upsert`](commands/tmh_learners_batch-upsert.md).
 
 ### `tmh learners create`
 
@@ -648,7 +837,7 @@ Create a learner
 
 Adds a person to the organization and invites them to a course in one call, using one seat. If the email or `externalId` already belongs to an active learner in the course, nothing is created. With `delivery: "none"`, no email is sent and the response includes a `joinUrl` for you to deliver.
 
-```sh
+```text
 tmh learners create [flags]
 ```
 
@@ -669,7 +858,17 @@ tmh learners create [flags]
 | `--delivery` | `email` (default) sends the invite email. `none` sends nothing and returns `joinUrl` for you to deliver; one of: email, none |
 | `--seat-policy` | `require_available` fails with `409` when no seat is free; one of: require_available |
 
-Every flag: [`tmh learners create`](commands/tmh_learners_create.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh learners create \
+  --email dana.whitfield@example.com \
+  --name "Dana Whitfield" \
+  | jq -r .learnerId
+```
+
+All flags: [`tmh learners create`](commands/tmh_learners_create.md).
 
 ### `tmh learners create-launch-link`
 
@@ -677,7 +876,7 @@ Create a launch link
 
 Creates a link that opens the course with the learner already signed in, for a "Start training" button in your product. The link works once and expires after 5 minutes: create it when the learner clicks, then redirect them to it. Never email, store or log it. Only for a learner who has accepted their invite.
 
-```sh
+```text
 tmh learners create-launch-link <learnerId> [flags]
 ```
 
@@ -693,7 +892,15 @@ tmh learners create-launch-link <learnerId> [flags]
 |---|---|
 | `--course-id` | The course. Defaults to the organization's default course. |
 
-Every flag: [`tmh learners create-launch-link`](commands/tmh_learners_create-launch-link.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh learners create-launch-link sub_01JD80AB2C3D4E5F6G7H8J9K0M \
+  | jq -r .url
+```
+
+All flags: [`tmh learners create-launch-link`](commands/tmh_learners_create-launch-link.md).
 
 ### `tmh learners export`
 
@@ -701,7 +908,7 @@ Export learners
 
 Exports the organization's learners in one course as CSV, optionally only those with one `status`. Requires the `learners:read` scope.
 
-```sh
+```text
 tmh learners export [flags]
 ```
 
@@ -719,7 +926,14 @@ tmh learners export [flags]
 | `--course-id` | The course to export. Defaults to the organization's default course. |
 | `--status` | Only export learners with this status; one of: not_started, invite_bounced, in_progress, compliant, expiring_soon, expired, removed |
 
-Every flag: [`tmh learners export`](commands/tmh_learners_export.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh learners export --format csv --status expired -o learners.csv
+```
+
+All flags: [`tmh learners export`](commands/tmh_learners_export.md).
 
 ### `tmh learners list`
 
@@ -727,7 +941,7 @@ List all learners
 
 Returns a list of the organization's learners in one course, with each learner's status, dates and current certificate. Filter by `status`, or find one learner by `email` or `externalId`.
 
-```sh
+```text
 tmh learners list [flags]
 ```
 
@@ -748,7 +962,16 @@ tmh learners list [flags]
 | `--status` | Status; one of: not_started, invite_bounced, in_progress, compliant, expiring_soon, expired, removed |
 | `--course-id` | The course. Defaults to the organization's default course. |
 
-Every flag: [`tmh learners list`](commands/tmh_learners_list.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh learners list \
+  --status in_progress \
+  | jq -r '.items[] | [.learnerId, .email, .status] | @tsv'
+```
+
+All flags: [`tmh learners list`](commands/tmh_learners_list.md).
 
 ### `tmh learners offboard`
 
@@ -756,7 +979,7 @@ Offboard a learner
 
 Removes a learner from the organization. A learner who hasn't started has their invite cancelled and the seat returned; a learner who has started keeps their training history and certificates. Releases the learner's `externalId`.
 
-```sh
+```text
 tmh learners offboard <learnerId> [flags]
 ```
 
@@ -773,7 +996,14 @@ tmh learners offboard <learnerId> [flags]
 |---|---|
 | `--course-id` | The course. Defaults to the organization's default course. |
 
-Every flag: [`tmh learners offboard`](commands/tmh_learners_offboard.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh learners offboard sub_01JD80AB2C3D4E5F6G7H8J9K0M | jq -r .status
+```
+
+All flags: [`tmh learners offboard`](commands/tmh_learners_offboard.md).
 
 ### `tmh learners remind`
 
@@ -781,7 +1011,7 @@ Remind a learner
 
 Emails the learner a reminder: the invite again if they haven't started, or a nudge to finish if they have.
 
-```sh
+```text
 tmh learners remind <learnerId> [flags]
 ```
 
@@ -797,7 +1027,14 @@ tmh learners remind <learnerId> [flags]
 |---|---|
 | `--course-id` | The course. Defaults to the organization's default course. |
 
-Every flag: [`tmh learners remind`](commands/tmh_learners_remind.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh learners remind sub_01JD80AB2C3D4E5F6G7H8J9K0M | jq -r .action
+```
+
+All flags: [`tmh learners remind`](commands/tmh_learners_remind.md).
 
 ### `tmh learners retrieve`
 
@@ -805,7 +1042,7 @@ Retrieve a learner
 
 Retrieves a learner's status in one course.
 
-```sh
+```text
 tmh learners retrieve <learnerId> [flags]
 ```
 
@@ -821,7 +1058,14 @@ tmh learners retrieve <learnerId> [flags]
 |---|---|
 | `--course-id` | The course. Defaults to the organization's default course. |
 
-Every flag: [`tmh learners retrieve`](commands/tmh_learners_retrieve.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh learners retrieve sub_01JD80AB2C3D4E5F6G7H8J9K0M | jq -r .status
+```
+
+All flags: [`tmh learners retrieve`](commands/tmh_learners_retrieve.md).
 
 ### `tmh learners update`
 
@@ -829,7 +1073,7 @@ Update a learner
 
 Updates a learner's `name` or `externalId`; parameters you don't send are left unchanged. Send the body as `application/merge-patch+json` with the learner's current `ETag` in `If-Match`.
 
-```sh
+```text
 tmh learners update <learnerId> [flags]
 ```
 
@@ -848,7 +1092,19 @@ tmh learners update <learnerId> [flags]
 | `--name` | The learner's full name. |
 | `--external-id` | Your own id for the learner. Set it to `null` to clear it. |
 
-Every flag: [`tmh learners update`](commands/tmh_learners_update.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+etag=$(tmh learners retrieve sub_01JD80AB2C3D4E5F6G7H8J9K0M \
+  --show-headers 2>&1 >/dev/null | sed -n 's/^< Etag: //p')
+tmh learners update sub_01JD80AB2C3D4E5F6G7H8J9K0M \
+  --name "Dana Whitfield" \
+  --if-match "$etag" \
+  | jq -r .name
+```
+
+All flags: [`tmh learners update`](commands/tmh_learners_update.md).
 
 ### `tmh learners upsert-by-external-id`
 
@@ -856,7 +1112,7 @@ Create or retrieve a learner by your id
 
 Makes sure a learner exists for your own id. Creates and invites the learner the first time, and returns them on every later call, so a sync job can replay it safely. Never uses a second seat.
 
-```sh
+```text
 tmh learners upsert-by-external-id <externalId> [flags]
 ```
 
@@ -876,7 +1132,17 @@ tmh learners upsert-by-external-id <externalId> [flags]
 | `--delivery` | `email` (default) sends the invite email. `none` sends nothing and returns `joinUrl` for you to deliver; one of: email, none |
 | `--seat-policy` | `require_available` fails with `409` when no seat is free; one of: require_available |
 
-Every flag: [`tmh learners upsert-by-external-id`](commands/tmh_learners_upsert-by-external-id.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh learners upsert-by-external-id hr-1042 \
+  --email dana.whitfield@example.com \
+  --name "Dana Whitfield" \
+  | jq -r .learnerId
+```
+
+All flags: [`tmh learners upsert-by-external-id`](commands/tmh_learners_upsert-by-external-id.md).
 
 ## `tmh members`
 
@@ -886,7 +1152,7 @@ List all members
 
 Returns a list of the organization's members, its admins and learners. Pass `role=admin` to list only admins.
 
-```sh
+```text
 tmh members list [flags]
 ```
 
@@ -905,7 +1171,16 @@ tmh members list [flags]
 | `--include` | Opt-in, comma-separated. With `enrollmentSubject`, a member whose `subjectId` is null carries `enrollmentSubjectId`: the subject their email resolves to (a never-signed-in invitee), or null when none. Use it only to match the member to Enrollments; it is not an address for member routes. With `holdsInvitation`, each learner carries `holdsInvitation`: whether the organization has an invitation for their email or a Seat bound to them. Each key is omitted when its lookup failed. |
 | `--role` | Only admins (paginated); one of: admin |
 
-Every flag: [`tmh members list`](commands/tmh_members_list.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh members list \
+  --role admin \
+  | jq -r '.items[] | [.email, .name] | @tsv'
+```
+
+All flags: [`tmh members list`](commands/tmh_members_list.md).
 
 ### `tmh members retrieve`
 
@@ -913,7 +1188,7 @@ Retrieve a member
 
 Retrieves a member of the organization.
 
-```sh
+```text
 tmh members retrieve <subjectId> [flags]
 ```
 
@@ -925,7 +1200,14 @@ tmh members retrieve <subjectId> [flags]
 | Retries | Retried on connection errors, 409 `conflict`, 429 and 5xx (`--max-retries`) |
 | Idempotency | None |
 
-Every flag: [`tmh members retrieve`](commands/tmh_members_retrieve.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh members retrieve sub_01JD80AB2C3D4E5F6G7H8J9K0M | jq -r .role
+```
+
+All flags: [`tmh members retrieve`](commands/tmh_members_retrieve.md).
 
 ## `tmh operations`
 
@@ -935,7 +1217,7 @@ Retrieve an operation
 
 Retrieves a bulk operation and its result. Operations are kept for 24 hours.
 
-```sh
+```text
 tmh operations retrieve <operationId> [flags]
 ```
 
@@ -947,7 +1229,14 @@ tmh operations retrieve <operationId> [flags]
 | Retries | Retried on connection errors, 409 `conflict`, 429 and 5xx (`--max-retries`) |
 | Idempotency | None |
 
-Every flag: [`tmh operations retrieve`](commands/tmh_operations_retrieve.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh operations retrieve op_01JD8T4V6W8X0Y2Z4A6B8C0D2E | jq .done
+```
+
+All flags: [`tmh operations retrieve`](commands/tmh_operations_retrieve.md).
 
 ## `tmh seats`
 
@@ -957,7 +1246,7 @@ Retrieve the seat inventory
 
 Retrieves how many seats the organization has, how many are assigned and how many are available for new invites. Requires the `enrollments:read` scope.
 
-```sh
+```text
 tmh seats retrieve [flags]
 ```
 
@@ -969,7 +1258,14 @@ tmh seats retrieve [flags]
 | Retries | Retried on connection errors, 409 `conflict`, 429 and 5xx (`--max-retries`) |
 | Idempotency | None |
 
-Every flag: [`tmh seats retrieve`](commands/tmh_seats_retrieve.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh seats retrieve | jq .available
+```
+
+All flags: [`tmh seats retrieve`](commands/tmh_seats_retrieve.md).
 
 ## `tmh webhook-subscriptions`
 
@@ -979,7 +1275,7 @@ Create a webhook subscription
 
 Subscribes an HTTPS endpoint to event types and creates its signing secret. Requires the `webhooks:manage` or `org:admin` scope.
 
-```sh
+```text
 tmh webhook-subscriptions create [flags]
 ```
 
@@ -998,7 +1294,17 @@ tmh webhook-subscriptions create [flags]
 | `--description` | A description for your own reference. |
 | `--seats-low-threshold` | Send `seats.low` when available seats drop to this number. Defaults to 5. |
 
-Every flag: [`tmh webhook-subscriptions create`](commands/tmh_webhook-subscriptions_create.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh webhook-subscriptions create \
+  --endpoint-url https://example.com/webhooks/teachmehipaa \
+  --event-types learner.certified \
+  | jq -r .secret
+```
+
+All flags: [`tmh webhook-subscriptions create`](commands/tmh_webhook-subscriptions_create.md).
 
 ### `tmh webhook-subscriptions delete`
 
@@ -1006,7 +1312,7 @@ Delete a webhook subscription
 
 Deletes a webhook subscription and its signing secret. Requires the `webhooks:manage` or `org:admin` scope.
 
-```sh
+```text
 tmh webhook-subscriptions delete <subscriptionId> [flags]
 ```
 
@@ -1018,7 +1324,15 @@ tmh webhook-subscriptions delete <subscriptionId> [flags]
 | Retries | Never retried |
 | Idempotency | None |
 
-Every flag: [`tmh webhook-subscriptions delete`](commands/tmh_webhook-subscriptions_delete.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh webhook-subscriptions delete whs_01JD8Q5R7S9T1V3W5X7Y9Z1A3B \
+  && echo deleted
+```
+
+All flags: [`tmh webhook-subscriptions delete`](commands/tmh_webhook-subscriptions_delete.md).
 
 ### `tmh webhook-subscriptions list`
 
@@ -1026,7 +1340,7 @@ List all webhook subscriptions
 
 Returns a list of the organization's webhook subscriptions. Signing secrets are never returned. Requires the `webhooks:manage` or `org:admin` scope.
 
-```sh
+```text
 tmh webhook-subscriptions list [flags]
 ```
 
@@ -1043,7 +1357,15 @@ tmh webhook-subscriptions list [flags]
 | `--limit` | How many objects to return, between 1 and 100. Defaults to 20. |
 | `--cursor` | The `nextCursor` from the previous page. |
 
-Every flag: [`tmh webhook-subscriptions list`](commands/tmh_webhook-subscriptions_list.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh webhook-subscriptions list \
+  | jq -r '.items[] | [.subscriptionId, .endpointUrl, .enabled] | @tsv'
+```
+
+All flags: [`tmh webhook-subscriptions list`](commands/tmh_webhook-subscriptions_list.md).
 
 ### `tmh webhook-subscriptions redrive`
 
@@ -1051,7 +1373,7 @@ Retry failed deliveries
 
 Delivers the subscription's failed events again. Requires the `webhooks:manage` or `org:admin` scope.
 
-```sh
+```text
 tmh webhook-subscriptions redrive <subscriptionId> [flags]
 ```
 
@@ -1063,7 +1385,16 @@ tmh webhook-subscriptions redrive <subscriptionId> [flags]
 | Retries | Retried on connection errors, 409 `conflict`, 429 and 5xx (`--max-retries`) |
 | Idempotency | `tmh` generates an Idempotency-Key and reuses it on retries; `--idempotency-key` sets your own |
 
-Every flag: [`tmh webhook-subscriptions redrive`](commands/tmh_webhook-subscriptions_redrive.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh webhook-subscriptions redrive whs_01JD8Q5R7S9T1V3W5X7Y9Z1A3B \
+  --wait \
+  | jq .response
+```
+
+All flags: [`tmh webhook-subscriptions redrive`](commands/tmh_webhook-subscriptions_redrive.md).
 
 ### `tmh webhook-subscriptions retrieve`
 
@@ -1071,7 +1402,7 @@ Retrieve a webhook subscription
 
 Retrieves a webhook subscription. Requires the `webhooks:manage` or `org:admin` scope.
 
-```sh
+```text
 tmh webhook-subscriptions retrieve <subscriptionId> [flags]
 ```
 
@@ -1083,7 +1414,15 @@ tmh webhook-subscriptions retrieve <subscriptionId> [flags]
 | Retries | Retried on connection errors, 409 `conflict`, 429 and 5xx (`--max-retries`) |
 | Idempotency | None |
 
-Every flag: [`tmh webhook-subscriptions retrieve`](commands/tmh_webhook-subscriptions_retrieve.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh webhook-subscriptions retrieve whs_01JD8Q5R7S9T1V3W5X7Y9Z1A3B \
+  | jq -r '.eventTypes[]'
+```
+
+All flags: [`tmh webhook-subscriptions retrieve`](commands/tmh_webhook-subscriptions_retrieve.md).
 
 ### `tmh webhook-subscriptions test`
 
@@ -1091,7 +1430,7 @@ Send a test event
 
 Sends a signed test delivery to the subscription's endpoint, so you can check your verifier. Requires the `webhooks:manage` or `org:admin` scope.
 
-```sh
+```text
 tmh webhook-subscriptions test <subscriptionId> [flags]
 ```
 
@@ -1103,7 +1442,16 @@ tmh webhook-subscriptions test <subscriptionId> [flags]
 | Retries | Retried on connection errors, 409 `conflict`, 429 and 5xx (`--max-retries`) |
 | Idempotency | `tmh` generates an Idempotency-Key and reuses it on retries; `--idempotency-key` sets your own |
 
-Every flag: [`tmh webhook-subscriptions test`](commands/tmh_webhook-subscriptions_test.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+tmh webhook-subscriptions test whs_01JD8Q5R7S9T1V3W5X7Y9Z1A3B \
+  --wait \
+  | jq .response
+```
+
+All flags: [`tmh webhook-subscriptions test`](commands/tmh_webhook-subscriptions_test.md).
 
 ### `tmh webhook-subscriptions update`
 
@@ -1111,7 +1459,7 @@ Update a webhook subscription
 
 Updates a webhook subscription; parameters you don't send are left unchanged. Send its current `ETag` in `If-Match`. The signing secret doesn't change. Requires the `webhooks:manage` or `org:admin` scope.
 
-```sh
+```text
 tmh webhook-subscriptions update <subscriptionId> [flags]
 ```
 
@@ -1132,4 +1480,16 @@ tmh webhook-subscriptions update <subscriptionId> [flags]
 | `--description` | A description for your own reference. |
 | `--seats-low-threshold` | Send `seats.low` when available seats drop to this number. |
 
-Every flag: [`tmh webhook-subscriptions update`](commands/tmh_webhook-subscriptions_update.md).
+Example:
+
+```sh
+# Runs as your sandbox profile (tmh login). Add --live for Live.
+etag=$(tmh webhook-subscriptions retrieve whs_01JD8Q5R7S9T1V3W5X7Y9Z1A3B \
+  --show-headers 2>&1 >/dev/null | sed -n 's/^< Etag: //p')
+tmh webhook-subscriptions update whs_01JD8Q5R7S9T1V3W5X7Y9Z1A3B \
+  --enabled=false \
+  --if-match "$etag" \
+  | jq .enabled
+```
+
+All flags: [`tmh webhook-subscriptions update`](commands/tmh_webhook-subscriptions_update.md).

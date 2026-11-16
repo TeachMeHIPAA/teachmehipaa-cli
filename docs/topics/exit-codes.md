@@ -1,8 +1,8 @@
-# Exit codes and errors
+# Exit codes
 
-`tmh` exits 0 on success and with a distinct code for each kind of failure,
-so a script can tell a missing Learner from an outage without parsing error
-text. Errors print on stderr, never stdout.
+`tmh` exits 0 on success and with one code per kind of failure, so a script
+tells a missing Learner from an outage without reading error text. Errors
+print on stderr, never stdout.
 
 ## Exit codes
 
@@ -18,12 +18,12 @@ text. Errors print on stderr, never stdout.
 | `7` | Server or connection error: `5xx`, no response, a response that isn't the API's, or under `--wait` a timed-out Operation or a failed one whose problem has no status. |
 | `130` | Interrupted with Ctrl-C. |
 
-Codes 6 and 7 come after `tmh` has already retried the request where that is
-safe; see [idempotency keys and retries](commands.md#idempotency-keys-and-retries).
+Codes 6 and 7 come after `tmh` has retried the request, where a retry is
+safe; see [idempotency keys and retries](requests.md#idempotency-keys-and-retries).
 
-## How errors print
+## Error output
 
-An API error prints its title and detail, each field error under it, and the
+An API error prints its title and detail, one line per field error, and the
 request id:
 
 <!-- doctest: validation-error -->
@@ -36,12 +36,12 @@ $ echo $?
 5
 ```
 
-Quote the request id when you contact support; it identifies the request in
-TeachMeHIPAA's logs. The API's problems also carry a machine-readable `code`,
-such as `validation_failed` or `seat_unavailable`, which `tmh` maps to the
-exit code through the HTTP status; branch on the exit code in scripts.
+Support finds the request in TeachMeHIPAA's logs by its request id, so
+quote it. The API's problem also has a machine-readable `code`, such as
+`validation_failed` or `seat_unavailable`. `tmh` maps the problem's HTTP
+status to the exit code; scripts branch on that.
 
-A usage mistake is caught before anything is sent:
+A usage mistake fails before anything is sent:
 
 <!-- doctest: usage-error -->
 ```console
@@ -51,7 +51,7 @@ $ echo $?
 1
 ```
 
-When the API can't be reached at all, `tmh` says so after its retries:
+An unreachable API fails after the retries:
 
 <!-- doctest: connection-error -->
 ```console
@@ -62,6 +62,9 @@ $ echo $?
 ```
 
 ## Branching on exit codes
+
+`case $?` reads one call's outcome. Run the command without `set -e`, or it
+exits the script before `case` runs:
 
 <!-- doctest: illustrative -->
 ```sh
@@ -76,5 +79,6 @@ case $? in
 esac
 ```
 
-`--verbose` shows each HTTP attempt, including the retries, with its status
-and request id; see [Output and scripting](output-and-scripting.md#seeing-the-http-requests).
+`--verbose` shows each HTTP attempt, retries included, with its status and
+request id; see [output](output.md#--verbose). More patterns are in
+[recipes](recipes.md#gate-a-ci-job-on-the-compliance-rate).

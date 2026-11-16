@@ -334,6 +334,9 @@ type bodyHelp struct {
 	nullable []string
 	// complex are fields with no flag, set with -d key:=<json>.
 	complex []string
+	// required are the fields a request must carry, which no cobra flag
+	// enforces since -d or --data may supply them.
+	required []BodyInput
 }
 
 func (g *generator) body(b irBody) (*resource.Body, bodyHelp, error) {
@@ -401,6 +404,12 @@ func (g *generator) body(b irBody) (*resource.Body, bodyHelp, error) {
 	body.Fields = w.out
 	help.mergePatch = t.MergePatch
 	help.complex = w.complex
+	help.required = w.required
+	if b.Required {
+		for _, part := range body.FileParts {
+			help.required = append(help.required, BodyInput{Flag: part.Name, Key: part.Name, File: true})
+		}
+	}
 	return body, help, nil
 }
 
@@ -421,8 +430,16 @@ type fieldWalker struct {
 	used     map[string]bool
 	out      []resource.Flag
 	// flags indexes out by flag name, so union members share one flag.
-	flags   map[string]int
-	complex []string
+	flags    map[string]int
+	complex  []string
+	required []BodyInput
+}
+
+// require records a required field once; union members can share one.
+func (w *fieldWalker) require(input BodyInput) {
+	if !slices.ContainsFunc(w.required, func(r BodyInput) bool { return r.Key == input.Key }) {
+		w.required = append(w.required, input)
+	}
 }
 
 func (w *fieldWalker) walk(prefix []string, fields []irField, required bool, seen map[string]bool) error {
@@ -443,6 +460,9 @@ func (w *fieldWalker) walk(prefix []string, fields []irField, required bool, see
 func (w *fieldWalker) field(path []string, field irField, required bool, seen map[string]bool) error {
 	key := strings.Join(path, ".")
 	if kind, values, ok := w.g.scalar(field.Type); ok {
+		if required {
+			w.require(BodyInput{Flag: kebab(key), Key: key})
+		}
 		return w.add(resource.Flag{
 			Name:   kebab(key),
 			Path:   path,
@@ -453,6 +473,9 @@ func (w *fieldWalker) field(path []string, field irField, required bool, seen ma
 	}
 	if field.Type.Kind != "ref" || seen[field.Type.Name] {
 		w.complex = append(w.complex, key)
+		if required {
+			w.require(BodyInput{Key: key})
+		}
 		return nil
 	}
 	t, ok := w.g.types[field.Type.Name]
@@ -468,6 +491,9 @@ func (w *fieldWalker) field(path []string, field irField, required bool, seen ma
 		return w.union(path, t, required, nested)
 	}
 	w.complex = append(w.complex, key)
+	if required {
+		w.require(BodyInput{Key: key})
+	}
 	return nil
 }
 
@@ -504,6 +530,9 @@ func (w *fieldWalker) union(path []string, t irType, required bool, seen map[str
 				// values are the union's mapping keys.
 				fieldPath := append(slices.Clone(path), field.Name)
 				values := slices.Sorted(maps.Keys(d.Mapping))
+				if memberRequired && field.Required {
+					w.require(BodyInput{Flag: kebab(strings.Join(fieldPath, ".")), Key: strings.Join(fieldPath, ".")})
+				}
 				if err := w.add(resource.Flag{
 					Name:   kebab(strings.Join(fieldPath, ".")),
 					Path:   fieldPath,
