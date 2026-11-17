@@ -14,8 +14,8 @@ func TestOpenOpensEachPageInTheBrowser(t *testing.T) {
 		page string
 		want string
 	}{
-		{"docs", "https://api.tme.so/developer"},
-		{"reference", "https://api.tme.so/developer"},
+		{"docs", "https://docs.teachmehipaa.com/api?lang=cli"},
+		{"reference", "https://docs.teachmehipaa.com/api?lang=cli"},
 		{"console", "https://console.teachmehipaa.com"},
 		{"dashboard", "https://console.teachmehipaa.com"},
 	}
@@ -61,7 +61,7 @@ func TestOpenPrintsTheURLWhenTheBrowserFails(t *testing.T) {
 	if result.ExitCode != 0 {
 		t.Fatalf("exit code = %d, stderr = %q", result.ExitCode, result.Stderr)
 	}
-	if result.Stdout != "https://api.tme.so/developer\n" {
+	if result.Stdout != "https://docs.teachmehipaa.com/api?lang=cli\n" {
 		t.Errorf("stdout = %q, want the URL", result.Stdout)
 	}
 	if !strings.Contains(result.Stderr, "xdg-open: no method available") {

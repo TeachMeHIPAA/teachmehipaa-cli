@@ -1,34 +1,17 @@
 # tmh documentation
 
-`tmh` is the TeachMeHIPAA Developer API on the command line. The topic pages
-below open with a synopsis of the commands they cover; prose follows. New
-here: [install](topics/install.md), then [login](topics/login.md), then
-[recipes](topics/recipes.md).
-
-## Topics
-
-| Page | Covers |
-|---|---|
-| [install](topics/install.md) | `go install`, `make build`, release channels, checksum verification, Docker, `tmh completion` |
-| [login](topics/login.md) | `tmh login`, `logout`, `whoami`; the `sandbox` and `live` profiles; CI credentials; Scopes; public operations |
-| [requests](topics/requests.md) | Positional ids, flags, `-d` and `--data`, `--if-match`, idempotency keys, retries, raw `get`/`post`/`put`/`patch`/`delete`, `tmh open` |
-| [output](topics/output.md) | JSON on stdout, pages, `--all`, `--ndjson`, `--verbose`, `--show-headers` |
-| [operations](topics/operations.md) | `--wait`, CSV exports with `-o`, Certificate PDFs, CSV imports with `--preview`, batch changes |
-| [events](topics/events.md) | `events list`, `events tail --forward-to`, `events resend`, the local Signing secret and signature, Webhook subscriptions, Test deliveries |
-| [exit-codes](topics/exit-codes.md) | Exit codes 0 to 7 and 130, error output, request ids, `case $?` |
-| [environment](topics/environment.md) | Environment variables, global flags, `config.toml` and `state.toml`, privacy, the version check |
-| [recipes](topics/recipes.md) | jq pipelines, CSV files, `while read` loops over pages, tailing Events, CI gates |
+The API reference and guides live at
+[docs.teachmehipaa.com/api](https://docs.teachmehipaa.com/api?lang=cli);
+`tmh open docs` opens them. The [README](../README.md) covers install and a
+first command.
 
 ## Reference
 
 - [Command reference](reference/commands/tmh.md): every command, its help
   and its flags, generated from the command tree with `cobra/doc`.
-- [Resource reference](reference/resources.md): every Developer API
-  operation with its command, HTTP route, Scopes, retries, idempotency,
-  conditional behavior and an example, generated from the SDK IR.
-- [`code-samples.json`](reference/code-samples.json): the same examples, one
-  per operationId, for the `cli` tab of the API reference. Generated from
-  the SDK IR with `make generate`.
+- [`code-samples.json`](reference/code-samples.json): one `tmh` example per
+  operationId, for the `cli` tab of the hosted API reference. Generated
+  from the SDK IR with `make generate`.
 
 ## Examples
 
@@ -46,8 +29,8 @@ Scripts in [`examples/`](../examples/README.md). Each reads
 
 These explain how `tmh` is built and why. Using it doesn't need them.
 
-- [CONTRIBUTING.md](../CONTRIBUTING.md): setup, the generators, the tests,
-  releases, and how the docs stay in sync with the code.
+- [CONTRIBUTING.md](../CONTRIBUTING.md): setup, the generators, the tests
+  and releases.
 - [`adr/`](adr/0001-generated-surface-from-shared-ir.md): architecture
   decision records, such as
   [generated surface from a shared IR](adr/0001-generated-surface-from-shared-ir.md),

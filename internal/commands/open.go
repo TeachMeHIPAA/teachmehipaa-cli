@@ -13,7 +13,7 @@ import (
 const (
 	// developerDocsURL serves both the guides and the API reference; the
 	// developer OpenAPI document declares no separate externalDocs.
-	developerDocsURL = "https://api.tme.so/developer"
+	developerDocsURL = "https://docs.teachmehipaa.com/api?lang=cli"
 	consoleURL       = "https://console.teachmehipaa.com"
 )
 

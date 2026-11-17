@@ -347,3 +347,13 @@ func shellQuote(value string) string {
 	}
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`, "$", `\$`, "`", "\\`").Replace(value) + `"`
 }
+
+// commandPath is how tmh spells a resource: ["webhookSubscriptions"] is
+// "tmh webhook-subscriptions".
+func commandPath(path []string) string {
+	words := []string{"tmh"}
+	for _, p := range path {
+		words = append(words, kebab(p))
+	}
+	return strings.Join(words, " ")
+}
