@@ -47,7 +47,7 @@ func TestTheDocumentedExitCodeTablesMatchTheExitCodesTmhReturns(t *testing.T) {
 		exitServer:      "server",
 		exitInterrupted: "interrupted",
 	}
-	for _, page := range []string{"README.md", "docs/topics/exit-codes.md"} {
+	for _, page := range []string{"README.md"} {
 		documented := documentedExitCodes(t, page)
 		for code, word := range want {
 			meaning, ok := documented[code]

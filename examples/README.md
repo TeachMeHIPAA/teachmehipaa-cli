@@ -3,8 +3,7 @@
 Bash scripts that run `tmh` against the Sandbox Environment. Each reads a
 Sandbox API client's credentials from `TMH_CLIENT_ID` and
 `TMH_CLIENT_SECRET`, needs no `tmh login`, and exits with a message when
-either is unset. Where noted, they need [jq](https://jqlang.org/). Shorter
-one-off workflows are in [recipes](../docs/topics/recipes.md).
+either is unset. Where noted, they need [jq](https://jqlang.org/).
 
 | Example | What it does |
 |---|---|
@@ -15,7 +14,7 @@ one-off workflows are in [recipes](../docs/topics/recipes.md).
 
 ## Running them
 
-[Install](../docs/topics/install.md) `tmh`, then:
+[Install](../README.md#install) `tmh`, then:
 
 <!-- doctest: illustrative -->
 ```sh

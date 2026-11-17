@@ -23,8 +23,8 @@ import (
 	"github.com/TeachMeHIPAA/teachmehipaa-cli/internal/testkit"
 )
 
-// The documentation tests: every shell example in the README, the guides
-// and examples/ names real commands and flags, and every session annotated
+// The documentation tests: every shell example in the README and examples/
+// names real commands and flags, and every session annotated
 // with a name runs against the fake transport and prints exactly what the
 // docs show.
 
@@ -36,11 +36,7 @@ var shellLangs = []string{"console", "sh", "shell", "bash"}
 // documentedPages are the Markdown pages whose examples are tested.
 func documentedPages(t *testing.T) []string {
 	t.Helper()
-	topics, err := filepath.Glob(filepath.Join(repoRoot, "docs/topics/*.md"))
-	if err != nil || len(topics) == 0 {
-		t.Fatalf("no topic pages found: %v", err)
-	}
-	return append([]string{filepath.Join(repoRoot, "README.md"), filepath.Join(repoRoot, "examples/README.md")}, topics...)
+	return []string{filepath.Join(repoRoot, "README.md"), filepath.Join(repoRoot, "examples/README.md")}
 }
 
 func readFile(t *testing.T, path string) string {
@@ -69,10 +65,6 @@ func TestEveryShellExampleIsTestedOrMarkedIllustrative(t *testing.T) {
 			}
 			switch {
 			case block.Annotation == "" || block.Annotation == "illustrative":
-			case block.Annotation == "synopsis":
-				if block.Lang != "text" {
-					t.Errorf("%s: a synopsis is a text block, not %s", block.Where(rel(page)), block.Lang)
-				}
 			case block.Lang != "console":
 				t.Errorf("%s: only console blocks run as sessions; mark this %s block illustrative",
 					block.Where(rel(page)), block.Lang)
@@ -126,7 +118,7 @@ func TestEveryTmhCommandInTheDocsAndExamplesExists(t *testing.T) {
 			}
 		}
 	}
-	if checked < 30 {
+	if checked < 10 {
 		t.Errorf("checked only %d tmh commands; is the shell parser finding them?", checked)
 	}
 }
@@ -153,73 +145,6 @@ func checkInvocation(args []string) error {
 		return err
 	}
 	return cmd.ValidateFlagGroups()
-}
-
-var (
-	synopsisWord  = regexp.MustCompile(`^[a-z][a-z-]*$`)
-	synopsisFlags = regexp.MustCompile(`(?:^|[\s\[|])(--[a-z][a-z0-9.-]*|-[a-zA-Z])\b`)
-)
-
-// TestEverySynopsisNamesRealCommandsAndFlags checks the usage blocks that
-// open the topic pages, `<!-- doctest: synopsis -->` text blocks with one
-// `tmh …` command per line: the command exists and has every flag named.
-func TestEverySynopsisNamesRealCommandsAndFlags(t *testing.T) {
-	checked := 0
-	for _, page := range documentedPages(t) {
-		for _, block := range doctest.Blocks(readFile(t, page)) {
-			if block.Annotation != "synopsis" {
-				continue
-			}
-			for _, line := range strings.Split(strings.TrimSpace(block.Body), "\n") {
-				checked++
-				words := strings.Fields(line)
-				if len(words) == 0 || words[0] != "tmh" {
-					t.Errorf("%s: %q: a synopsis line starts with tmh", block.Where(rel(page)), line)
-					continue
-				}
-				path := []string{}
-				for _, word := range words[1:] {
-					if !synopsisWord.MatchString(word) {
-						break
-					}
-					path = append(path, word)
-				}
-				root := commands.NewRoot(cmdutil.Deps{Stdin: strings.NewReader(""), Stdout: io.Discard, Stderr: io.Discard})
-				// Words past the command are literal arguments, such as
-				// `tmh open docs`; a group of commands takes none.
-				cmd, rest, err := root.Find(path)
-				if err == nil && len(rest) > 0 {
-					if cmd.HasSubCommands() {
-						err = fmt.Errorf("unknown command %q", rest[0])
-					} else {
-						err = cmd.ValidateArgs(rest)
-					}
-				}
-				if err != nil {
-					t.Errorf("%s: %q: %v", block.Where(rel(page)), line, err)
-					continue
-				}
-				for _, match := range synopsisFlags.FindAllStringSubmatch(line, -1) {
-					name := strings.TrimLeft(match[1], "-")
-					var flag *pflag.Flag
-					if len(name) == 1 {
-						flag = cmd.Flags().ShorthandLookup(name)
-						if flag == nil {
-							flag = cmd.InheritedFlags().ShorthandLookup(name)
-						}
-					} else {
-						flag = cmd.Flag(name)
-					}
-					if flag == nil {
-						t.Errorf("%s: %q: %s has no flag %s", block.Where(rel(page)), line, cmd.CommandPath(), match[1])
-					}
-				}
-			}
-		}
-	}
-	if checked < 20 {
-		t.Errorf("checked only %d synopsis lines; are the topic pages annotated?", checked)
-	}
 }
 
 // TestEveryJqFilterInTheDocsCompiles compiles each jq program in the docs,

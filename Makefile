@@ -22,9 +22,8 @@ shellcheck:
 fmt:
 	gofmt -w .
 
-# Regenerates the resource commands, docs/reference/resources.md and
-# docs/reference/code-samples.json from openapi/sdk-ir.json, then the command
-# reference from the new commands.
+# Regenerates the resource commands and docs/reference/code-samples.json from
+# openapi/sdk-ir.json, then the command reference from the new commands.
 # go generate scans the package it runs in, so it trips over generated files the
 # generator has just deleted; calling the generator directly avoids that.
 generate:
